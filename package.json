@@ -1,0 +1,25 @@
+{
+  "name": "win_wheel",
+  "version": "1.0.0",
+  "description": "Backend app for win wheel casino game",
+  "keywords": [
+    "win",
+    "wheel",
+    "game"
+  ],
+  "homepage": "https://github.com/magicdeveloper250/win_wheel_game#readme",
+  "bugs": {
+    "url": "https://github.com/magicdeveloper250/win_wheel_game/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/magicdeveloper250/win_wheel_game.git"
+  },
+  "license": "ISC",
+  "author": "IMPANO Manzi Enock",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm test"
+  }
+}
