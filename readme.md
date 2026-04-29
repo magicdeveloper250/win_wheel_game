@@ -1,6 +1,4 @@
-Here's the merged README:
-
-```
+ 
 # WinWheel
 
 Full-stack game platform built with React, Express, Prisma, and MySQL.
@@ -252,4 +250,3 @@ Opens a visual database browser at \`http://localhost:5555\`.
 | \`DATABASE_URL\` | MySQL connection string | Yes |
 | \`JWT_SECRET\` | JWT signing secret | Yes |
 | \`JWT_EXPIRES_IN\` | JWT expiry duration | No (default 7d) |
-```
