@@ -34,7 +34,7 @@ Full-stack game platform built with React, Express, Prisma, and MySQL.
 - MySQL 8+
 - npm / yarn / pnpm
 
----
+ 
 
 ## Project Structure
 
@@ -66,7 +66,7 @@ winwheel/
         └── seed.ts            # Database seeder
 \`\`\`
 
----
+ 
 
 ## Getting Started
 
