@@ -1,19 +1,233 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-
-
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@font-face {
+  font-family: 'centurygothic';
+  src: url('/fonts/centurygothic.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
 }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #1565c0;
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-display: "centurygothic";
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LIGHT MODE  (game always runs dark, but keep a usable light
+   for any admin / settings UI built on top)
+───────────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds — deep casino navy */
+  --background:        oklch(0.14 0.042 254.6);   /* #0e2456  game bg        */
+  --foreground:        oklch(0.95 0.012 254.6);    /* near-white text         */
+
+  --card:              oklch(0.18 0.048 254.6);    /* #112050  card surfaces  */
+  --card-foreground:   oklch(0.95 0.012 254.6);
+
+  --popover:           oklch(0.16 0.044 254.6);
+  --popover-foreground:oklch(0.95 0.012 254.6);
+
+  /* Primary — casino gold */
+  --primary:           oklch(0.855 0.162 84.6);    /* #ffd700 gold            */
+  --primary-foreground:oklch(0.13 0.035 254.6);    /* dark navy on gold       */
+
+  /* Secondary — muted navy panel */
+  --secondary:         oklch(0.22 0.052 254.6);    /* #1a3a7a  panel bg       */
+  --secondary-foreground: oklch(0.82 0.025 254.6);
+
+  /* Muted — subtle panel tint */
+  --muted:             oklch(0.19 0.040 254.6);    /* #0d2a5e  row alt        */
+  --muted-foreground:  oklch(0.60 0.042 254.6);    /* dim text                */
+
+  /* Accent — roulette red */
+  --accent:            oklch(0.48 0.218 25.3);     /* #c0392b  red segments   */
+  --accent-foreground: oklch(0.97 0.004 0);        /* white on red            */
+
+  --destructive:       oklch(0.55 0.240 25.3);     /* deeper red for errors   */
+
+  --border:            oklch(0.30 0.065 254.6);    /* #2a5298  panel borders  */
+  --input:             oklch(0.22 0.048 254.6);    /* dark input bg           */
+  --ring:              oklch(0.855 0.162 84.6);    /* gold focus ring         */
+
+  /* Chart scale: gold → red → navy ramp (matches wheel) */
+  --chart-1:           oklch(0.855 0.162 84.6);    /* gold                    */
+  --chart-2:           oklch(0.72  0.195 40.0);    /* amber                   */
+  --chart-3:           oklch(0.55  0.218 25.3);    /* red                     */
+  --chart-4:           oklch(0.38  0.120 254.6);   /* mid navy                */
+  --chart-5:           oklch(0.22  0.048 254.6);   /* deep navy               */
+
+  --radius: 0.625rem;
+
+  /* Sidebar — history/prediction panels */
+  --sidebar:                   oklch(0.16 0.044 254.6);
+  --sidebar-foreground:        oklch(0.90 0.014 254.6);
+  --sidebar-primary:           oklch(0.855 0.162 84.6);  /* gold                */
+  --sidebar-primary-foreground:oklch(0.13 0.035 254.6);
+  --sidebar-accent:            oklch(0.22 0.052 254.6);
+  --sidebar-accent-foreground: oklch(0.82 0.025 254.6);
+  --sidebar-border:            oklch(0.30 0.065 254.6);
+  --sidebar-ring:              oklch(0.855 0.162 84.6);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DARK MODE  (identical to :root for this game — always dark)
+───────────────────────────────────────────────────────────── */
+.dark {
+  --background:        oklch(0.11 0.038 254.6);    /* even darker for .dark   */
+  --foreground:        oklch(0.96 0.008 254.6);
+
+  --card:              oklch(0.16 0.044 254.6);
+  --card-foreground:   oklch(0.96 0.008 254.6);
+
+  --popover:           oklch(0.14 0.040 254.6);
+  --popover-foreground:oklch(0.96 0.008 254.6);
+
+  --primary:           oklch(0.875 0.168 84.6);    /* brighter gold in dark   */
+  --primary-foreground:oklch(0.12 0.032 254.6);
+
+  --secondary:         oklch(0.24 0.055 254.6);
+  --secondary-foreground: oklch(0.85 0.020 254.6);
+
+  --muted:             oklch(0.20 0.042 254.6);
+  --muted-foreground:  oklch(0.62 0.038 254.6);
+
+  --accent:            oklch(0.50 0.222 25.3);
+  --accent-foreground: oklch(0.97 0.004 0);
+
+  --destructive:       oklch(0.58 0.248 25.3);
+
+  --border:            oklch(0.28 0.062 254.6);
+  --input:             oklch(0.20 0.045 254.6);
+  --ring:              oklch(0.875 0.168 84.6);
+
+  --chart-1:           oklch(0.875 0.168 84.6);
+  --chart-2:           oklch(0.74  0.198 40.0);
+  --chart-3:           oklch(0.57  0.222 25.3);
+  --chart-4:           oklch(0.40  0.125 254.6);
+  --chart-5:           oklch(0.24  0.050 254.6);
+
+  --sidebar:                   oklch(0.14 0.040 254.6);
+  --sidebar-foreground:        oklch(0.92 0.012 254.6);
+  --sidebar-primary:           oklch(0.875 0.168 84.6);
+  --sidebar-primary-foreground:oklch(0.12 0.032 254.6);
+  --sidebar-accent:            oklch(0.24 0.055 254.6);
+  --sidebar-accent-foreground: oklch(0.85 0.020 254.6);
+  --sidebar-border:            oklch(0.28 0.062 254.6);
+  --sidebar-ring:              oklch(0.875 0.168 84.6);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BASE LAYER
+───────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+ 
+  }
+
+  html {
+    font-family: var(--font-display), "Century Gothic", Arial, sans-serif;
+    /* Force dark everywhere — this is a full-screen game */
+    color-scheme: dark;
+  }
+
+  /* ── Scrollbars — gold on navy ───────────────────────────── */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: oklch(0.16 0.044 254.6);   /* dark navy track */
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.855 0.162 84.6);   /* gold thumb      */
+    border-radius: 9999px;
+    border: 2px solid oklch(0.16 0.044 254.6);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.92 0.148 84.6);    /* lighter gold    */
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.855 0.162 84.6) oklch(0.16 0.044 254.6);
+  }
+
+  /* ── Selection highlight ─────────────────────────────────── */
+  ::selection {
+    background-color: oklch(0.855 0.162 84.6 / 35%);  /* gold tint */
+    color: #ffffff;
+  }
+
+  /* ── Focus outlines — gold, matching wheel pointer ───────── */
+  :focus-visible {
+    outline: 2px solid oklch(0.855 0.162 84.6);
+    outline-offset: 2px;
+  }
+
+  /* ── Remove default blue tap highlight on touch devices ──── */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Prevent text selection during wheel spin interactions ── */
+  canvas {
+    user-select: none;
+    -webkit-user-select: none;
+    display: block;
+  }
 }

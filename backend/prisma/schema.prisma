@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+
+model User{
+  id                  String                @unique @default("")
+  name                String
+  email               String                @unique
+  phone               String?               @unique
+  password            String
+  role                String
+  createdAt           DateTime?             @default(now())
+  updatedAt           DateTime              @updatedAt
+  gameBets            GameBet[]
+
+  transactions        Transaction[]
+
+  userSessions        UserSession[]
+
+  passwordResetTokens PasswordResetToken[]
+}
+
+model GameSession{
+  id            String             @unique @default("")
+  duration      Int
+  sessionNumber Int                @unique @default(0)
+  shouldWin     Boolean
+  multiplierId  String
+  createdAt     DateTime?          @default(now())
+  updatedAt     DateTime           @updatedAt
+  status        GameSessionStatus  @default(UPCOMING)
+  multiplier    GameWinMultiplier @relation(fields: [multiplierId], references: [id])
+  gameResults   GameResult[]
+
+  gameBets      GameBet[]
+}
+
+model GameBet{
+  id           String       @unique @default("")
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  targetNumber Int
+  amount       Decimal
+  sessionId    String
+  session      GameSession @relation(fields: [sessionId], references: [id])
+  createdAt    DateTime?    @default(now())
+  updatedAt    DateTime     @updatedAt
+
+}
+
+model GameResult{
+  id            String       @unique @default("")
+  sessionId     String
+  session       GameSession @relation(fields: [sessionId], references: [id])
+  winNumber     Int
+  winMultiplier Decimal
+  createdAt     DateTime?    @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Transaction{
+  id        String     @unique @default("")
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  amount    Decimal
+  type      String
+  tax       Decimal
+  createdAt DateTime?  @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+ 
+
+model AuditLog{
+  id        String     @unique @default("")
+  action    String
+  details   String
+  createdAt DateTime?  @default(now())
+}
+
+model SystemConfig{
+  id        String     @unique @default("")
+  key       String     @unique
+  value     String
+  createdAt DateTime?  @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model UserSession{
+  id        String     @unique @default("")
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  token     String     @unique
+  createdAt DateTime?  @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model PasswordResetToken{
+  id        String     @unique @default("")
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  token     String     @unique
+  expiresAt DateTime
+  createdAt DateTime?  @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model GameFinancialSetting{
+  id                  String     @unique @default("")
+  maxBetAmount        Decimal
+  minBetAmount        Decimal
+  taxPercentage       Decimal
+  houseEdgePercentage Decimal
+  createdAt           DateTime?  @default(now())
+  updatedAt           DateTime   @updatedAt
+}
+
+model GameTargetNumber{
+  id           String     @unique @default("")
+  targetNumber Int
+  color        String?
+  createdAt    DateTime?  @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+model GameWinMultiplier{
+  id               String     @unique @default("")
+  multiplierLetter String
+  winMultiplier    Decimal
+  color            String?
+  createdAt        DateTime?  @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  gameSessions GameSession[]
+}
+
+
+enum GameSessionStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
