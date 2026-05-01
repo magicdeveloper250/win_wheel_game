@@ -23,6 +23,12 @@ const prisma = new PrismaClient({ adapter }).$extends({
         records.forEach((r) => (r.id = generateSnowflakeIdString()));
         return query(args);
       },
+      async upsert({ args, query }) {   
+        if (!args.create.id) {
+          args.create.id = generateSnowflakeIdString();
+        }
+        return query(args);
+      },
     },
   },
 });

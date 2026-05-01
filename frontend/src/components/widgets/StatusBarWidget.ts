@@ -1,34 +1,24 @@
-// widgets/StatusBarWidget.ts
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
-import { GameStatusContext, type GameStatus } from "@/contexts/GameStatusContext";
-import { audioManager } from "@/managers/AudioManager";
+import { type GameStatus, GameStatusContext } from "@/contexts/GameStatusContext";
 import type { Layout } from "@/layouts/GameLayout";
 import { FocusManager } from "@/managers/FocusManager";
+import { audioManager } from "@/managers/AudioManager";
 
 export class StatusBarWidget {
   container: Container;
   private ctx: GameStatusContext;
+  private layout: Layout;
   private unsubscribe: (() => void) | null = null;
 
   private bg: Graphics;
-  private divider: Graphics;
-  private playingTabBg: Graphics;
-  private playingTabTxt: Text;
-  private gameIdTxt: Text;
-  private timerTxt: Text;
-  private timerBar: Graphics;
-  private timerBarFill: Graphics;
+  private statusTxt: Text;
+  private nextSessionTxt: Text;
+  private progressTrack: Graphics;
+  private progressFill: Graphics;
+  private muteBtn: Container;
   private muteBg: Graphics;
+  private muteIcon: Text;
   private muteTxt: Text;
-
-  private layout: Layout;
-
-  private _playingTab!: Container;
-  private _muteBtn!: Container;
-  private _muteBtnW: number = 65;
-  private _tabW: number = 70;
-  private _tabH: number = 22;
-  private _btnH: number = 20;
 
   constructor(ctx: GameStatusContext, layout: Layout, focusManager?: FocusManager) {
     this.ctx = ctx;
@@ -38,176 +28,176 @@ export class StatusBarWidget {
     this.bg = new Graphics();
     this.container.addChild(this.bg);
 
-    this.divider = new Graphics();
-    this.container.addChild(this.divider);
-
-    // Playing tab
-    const playingTab = new Container();
-    this.container.addChild(playingTab);
-    this.playingTabBg = new Graphics();
-    playingTab.addChild(this.playingTabBg);
-    this.playingTabTxt = new Text({
-      text: "Playing",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 12, fill: 0x1a1a1a, fontWeight: "bold" }),
-    });
-    this.playingTabTxt.anchor.set(0.5, 0.5);
-    playingTab.addChild(this.playingTabTxt);
-    this._playingTab = playingTab;
-
-    // Game ID
-    this.gameIdTxt = new Text({
-      text: "Current Game #—",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: layout.statusFontLg, fill: 0xffd700, fontWeight: "bold" }),
-    });
-    this.gameIdTxt.anchor.set(0, 0.5);
-    this.container.addChild(this.gameIdTxt);
-
-    // Timer text
-    this.timerTxt = new Text({
+    this.statusTxt = new Text({
       text: "Ready",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: layout.statusFontSm, fill: 0xaaccff }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: layout.statusFontLg,
+        fill: 0xdbeafe,
+        fontWeight: "bold",
+      }),
     });
-    this.timerTxt.anchor.set(1, 0.5);
-    this.container.addChild(this.timerTxt);
+    this.statusTxt.anchor.set(0.5, 0.5);
+    this.container.addChild(this.statusTxt);
 
-    // Progress bar
-    this.timerBar = new Graphics();
-    this.container.addChild(this.timerBar);
-    this.timerBarFill = new Graphics();
-    this.container.addChild(this.timerBarFill);
+    this.nextSessionTxt = new Text({
+      text: "Next Session: -",
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: layout.statusFontSm,
+        fill: 0x93c5fd,
+        fontWeight: "bold",
+      }),
+    });
+    this.nextSessionTxt.anchor.set(0.5, 0.5);
+    this.container.addChild(this.nextSessionTxt);
 
-    // Mute button
-    const muteBtn = new Container();
-    muteBtn.eventMode = "static";
-    muteBtn.cursor = "pointer";
+    this.progressTrack = new Graphics();
+    this.container.addChild(this.progressTrack);
+
+    this.progressFill = new Graphics();
+    this.container.addChild(this.progressFill);
+
+    this.muteBtn = new Container();
+    this.muteBtn.eventMode = "static";
+    this.muteBtn.cursor = "pointer";
     this.muteBg = new Graphics();
-    muteBtn.addChild(this.muteBg);
+    this.muteBtn.addChild(this.muteBg);
+    this.muteIcon = new Text({
+      text: "🔊",
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: layout.statusFontSm,
+        fill: 0xffffff,
+        fontWeight: "bold",
+      }),
+    });
+    this.muteIcon.anchor.set(0.5, 0.5);
+    this.muteBtn.addChild(this.muteIcon);
     this.muteTxt = new Text({
-      text: "🔊 Sound",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: layout.statusFontSm, fill: 0xffffff }),
+      text: "Sound On",
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: layout.statusFontSm,
+        fill: 0xffffff,
+        fontWeight: "bold",
+      }),
     });
     this.muteTxt.anchor.set(0.5, 0.5);
-    muteBtn.addChild(this.muteTxt);
-    muteBtn.on("pointerdown", () => {
-      const nowOn = audioManager.toggle();
-      this.muteTxt.text = nowOn ? "🔊 Sound" : "🔇 Muted";
-      this.muteBg.clear();
-      this.muteBg.roundRect(0, 0, this._muteBtnW, this._btnH, this._btnH / 2);
-      this.muteBg.fill({ color: nowOn ? 0x334466 : 0x553333 });
-    });
-    muteBtn.on("pointerover", () => { this.muteBg.alpha = 0.8; });
-    muteBtn.on("pointerout",  () => { this.muteBg.alpha = 1; });
-    this.container.addChild(muteBtn);
-    this._muteBtn = muteBtn;
+    this.muteBtn.addChild(this.muteTxt);
+    this.muteBtn.on("pointerdown", () => this.toggleMute());
+    this.muteBtn.on("pointerover", () => { this.muteBg.alpha = 0.85; });
+    this.muteBtn.on("pointerout", () => { this.muteBg.alpha = 1; });
+    this.container.addChild(this.muteBtn);
 
     this.applyLayout(layout);
     this.unsubscribe = this.ctx.subscribe((s) => this.update(s));
 
     if (focusManager) {
-      focusManager.addItem(muteBtn, () => { audioManager.toggle(); }, { group: "default", label: "Mute" });
+      focusManager.addItem(this.muteBtn, () => this.toggleMute(), { group: "default", label: "Mute" });
     }
+  }
+
+  private toggleMute(): void {
+    const nowOn = audioManager.toggle();
+    this.muteIcon.text = nowOn ? "🔊" : "🔇";
+    this.muteTxt.text = nowOn ? "Sound On" : "Muted";
+    this.redrawMuteButton(nowOn);
   }
 
   private applyLayout(layout: Layout): void {
-    const { W, statusBarH, statusFontLg, statusFontSm, pad } = layout;
-    const H    = statusBarH;
-    const row1Y = Math.round(H * 0.3);
-    const row2Y = Math.round(H * 0.72);
+    const { W, statusBarH, pad, statusFontLg } = layout;
+    const H = statusBarH;
+    const innerPadX = Math.max(12, Math.round(pad * 2.2));
+    const innerPadY = Math.max(6, Math.round(H * 0.1));
+    const barX = innerPadX;
+    const barW = W - innerPadX * 2;
+    const barH = Math.max(10, Math.round(H * 0.17));
+    const barY = H - barH - Math.max(8, Math.round(H * 0.1));
 
-    // Background
     this.bg.clear();
     this.bg.rect(0, 0, W, H);
-    this.bg.fill({ color: 0x0a1a3a, alpha: 0.95 });
+    this.bg.fill({ color: 0x0a1a3a, alpha: 0.96 });
+    this.bg.rect(0, 0, W, 2);
+    this.bg.fill({ color: 0x2563eb, alpha: 0.8 });
 
-    // Divider
-    this.divider.clear();
-    this.divider.rect(0, 0, W, 2);
-    this.divider.fill({ color: 0xffd700, alpha: 0.5 });
+    this.statusTxt.style.fontSize = Math.max(12, statusFontLg + 1);
+    this.statusTxt.x = W / 2;
+    this.statusTxt.y = innerPadY + Math.round(H * 0.16);
 
-    // Playing tab
-    const tabW = Math.round(Math.max(55, 70 * layout.uiScale));
-    const tabH = Math.round(Math.max(18, 22 * layout.uiScale));
-    this._tabW = tabW;
-    this._tabH = tabH;
-    this._playingTab.x = pad * 2;
-    this._playingTab.y = row1Y - tabH / 2;
-    this.playingTabBg.clear();
-    this.playingTabBg.roundRect(0, 0, tabW, tabH, 4);
-    this.playingTabBg.fill({ color: 0xffd700 });
-    this.playingTabTxt.style.fontSize = Math.round(Math.max(9, 12 * layout.uiScale));
-    this.playingTabTxt.x = tabW / 2;
-    this.playingTabTxt.y = tabH / 2;
+    this.nextSessionTxt.style.fontSize = Math.max(10, layout.statusFontSm + 1);
+    this.nextSessionTxt.x = W / 2;
+    this.nextSessionTxt.y = this.statusTxt.y + Math.round(H * 0.22);
 
-    // Game ID
-    this.gameIdTxt.style.fontSize = statusFontLg;
-    this.gameIdTxt.x = pad * 2 + tabW + pad * 2;
-    this.gameIdTxt.y = row1Y;
+    this.progressTrack.clear();
+    this.progressTrack.roundRect(barX, barY, barW, barH, barH / 2);
+    this.progressTrack.fill({ color: 0x1e3a70, alpha: 1 });
 
-    // Timer text — right aligned
-    this.timerTxt.style.fontSize = statusFontSm;
-    this.timerTxt.x = W - pad * 2;
-    this.timerTxt.y = row1Y;
-
-    // Progress bar (middle strip)
-    const barY = Math.round(H * 0.5) - 1;
-    const barX = pad * 2;
-    const barW = W - pad * 4;
-    this.timerBar.clear();
-    this.timerBar.roundRect(barX, barY, barW, 3, 2);
-    this.timerBar.fill({ color: 0x223355 });
-
-    // Mute button on row 2
-    const btnH     = Math.round(Math.max(16, 20 * layout.uiScale));
-    const muteBtnW = Math.round(Math.max(55, 65 * layout.uiScale));
-    this._btnH     = btnH;
-    this._muteBtnW = muteBtnW;
-
-    this._muteBtn.x = pad * 2;
-    this._muteBtn.y = row2Y - btnH / 2;
-    this.muteBg.clear();
-    this.muteBg.roundRect(0, 0, muteBtnW, btnH, btnH / 2);
-    this.muteBg.fill({ color: 0x334466 });
-    this.muteTxt.style.fontSize = statusFontSm;
-    this.muteTxt.x = muteBtnW / 2;
+    const btnW = Math.max(118, Math.round(W * 0.13));
+    const btnH = Math.max(34, Math.round(H * 0.3));
+    this.muteBtn.x = W - btnW - innerPadX;
+    this.muteBtn.y = innerPadY;
+    this.muteIcon.style.fontSize = Math.max(11, layout.statusFontSm + 2);
+    this.muteIcon.x = Math.max(13, Math.round(btnW * 0.18));
+    this.muteIcon.y = btnH / 2;
+    this.muteTxt.style.fontSize = Math.max(10, layout.statusFontSm + 1);
+    this.muteTxt.x = Math.round(btnW * 0.56);
     this.muteTxt.y = btnH / 2;
+    this.redrawMuteButton(true, btnW, btnH);
   }
 
-  private update(s: GameStatus): void {
-    const TOTAL     = this.ctx.COUNTDOWN_SECONDS;
-    const remaining = s.countdown;
-
-    this.gameIdTxt.text = `Current Game #${s.currentGameId}`;
-
-    if (s.phase === "countdown") {
-      this.timerTxt.text = `Time to next: ${remaining}s`;
-      (this.timerTxt.style as TextStyle).fill = remaining <= 3 ? 0xff6b6b : 0xaaccff;
-    } else if (s.phase === "spinning") {
-      this.timerTxt.text = "Spinning…";
-      (this.timerTxt.style as TextStyle).fill = 0xffd700;
-    } else if (s.phase === "result") {
-      this.timerTxt.text = s.lastPoints === 0 ? "⚪ Zero!" : `+${s.lastPoints} pts 🎉`;
-      (this.timerTxt.style as TextStyle).fill = s.lastPoints === 0 ? 0xaaaaaa : 0x7cfc00;
-    } else {
-      this.timerTxt.text = "Ready to spin";
-      (this.timerTxt.style as TextStyle).fill = 0xaaccff;
-    }
-
-    const frac = s.phase === "countdown" ? remaining / TOTAL : s.phase === "idle" ? 1 : 0;
-    const { W, statusBarH, pad } = this.layout;
-    const barX = pad * 2;
-    const barY = Math.round(statusBarH * 0.5) - 1;
-    const barW = W - pad * 4;
-
-    this.timerBarFill.clear();
-    if (frac > 0) {
-      this.timerBarFill.roundRect(barX, barY, barW * frac, 3, 2);
-      this.timerBarFill.fill({ color: remaining <= 3 ? 0xff4444 : 0xffd700 });
-    }
-
-    this.playingTabBg.clear();
-    this.playingTabBg.roundRect(0, 0, this._tabW, this._tabH, 4);
-    this.playingTabBg.fill({ color: s.phase === "spinning" ? 0xff6b35 : 0xffd700 });
+  private redrawMuteButton(soundOn: boolean, w?: number, h?: number): void {
+    const btnW = w ?? this.muteBg.width;
+    const btnH = h ?? this.muteBg.height;
+    this.muteBg.clear();
+    this.muteBg.roundRect(0, 0, btnW, btnH, btnH / 2);
+    this.muteBg.fill({ color: soundOn ? 0x2563eb : 0x475569, alpha: 0.95 });
   }
+
+ // In StatusBarWidget.update(), replace:
+// total = this.ctx.BETTING_SECONDS;
+// with:
+private update(s: GameStatus): void {
+  let seconds = 0;
+  let total = 1;
+  let label = "Ready";
+  let fillColor = 0x3b82f6;
+
+  if (s.phase === "betting") {
+    seconds = s.bettingWindow;
+    total = s.totalBettingSeconds || 30;    
+    label = `Betting Open — ${seconds}s left`;
+    fillColor = 0xf59e0b;
+  } else if (s.phase === "countdown") {
+    seconds = s.countdown;
+    total = 3;
+    label = "Bets locked — spinning soon…";
+    fillColor = 0xf59e0b;
+  } else if (s.phase === "spinning") {
+    label = "Spinning…";
+    fillColor = 0x60a5fa;
+  } else if (s.phase === "result") {
+    label = s.lastPoints > 0 ? `Result: +${s.lastPoints}` : "Result: No win";
+    fillColor = 0x10b981;
+  }
+
+  this.statusTxt.text = label;
+  this.nextSessionTxt.text = `Session #${s.currentGameId}`;
+
+  const frac = Math.max(0, Math.min(1, total > 0 ? seconds / total : 0));
+  const { W, statusBarH, pad } = this.layout;
+  const innerPadX = Math.max(12, Math.round(pad * 2.2));
+  const barX = innerPadX;
+  const barW = W - innerPadX * 2;
+  const barH = Math.max(10, Math.round(statusBarH * 0.17));
+  const barY = statusBarH - barH - Math.max(8, Math.round(statusBarH * 0.1));
+
+  this.progressFill.clear();
+  if (frac > 0) {
+    this.progressFill.roundRect(barX, barY, Math.max(8, Math.round(barW * frac)), barH, barH / 2);
+    this.progressFill.fill({ color: fillColor, alpha: 0.95 });
+  }
+}
 
   resize(layout: Layout): void {
     this.layout = layout;

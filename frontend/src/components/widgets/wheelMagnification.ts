@@ -6,7 +6,6 @@ import {
   Application,
   Container,
   Sprite,
-  Texture,
   DisplacementFilter,
   RenderTexture,
   Graphics,

@@ -10,15 +10,12 @@ export const validate =
   (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req[source]);
     if (!result.success) {
-      return res.status(400).json({
-        error: "Validation failed.",
-        issues: result.error.issues.map((e) => ({
-          field: e.path.join("."),
-          message: e.message,
-        })),
-      });
+      const message = result.error.issues
+        .map((e) => `${e.message}`)
+        .join(", ");
+
+      return res.status(400).json({ error: message });
     }
-    // Replace req[source] with the parsed (and coerced) data
     req[source] = result.data;
     next();
   };
@@ -32,7 +29,7 @@ export const createUserSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   phone: z
     .string()
-    .regex(/^\+?[1-9]\d{6,14}$/, "Invalid phone number."),
+    .regex(/^\+?[0-9]\d{6,14}$/, "Invalid phone number."),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters.")
@@ -50,7 +47,7 @@ export const updateUserSchema = z
     name: z.string().min(2, "Name must be at least 2 characters.").optional(),
     phone: z
       .string()
-      .regex(/^\+?[1-9]\d{6,14}$/, "Invalid phone number.")
+      .regex(/^\+?[0-9]\d{6,14}$/, "Invalid phone number.")
       .optional(),
     email: z.string().email("Invalid email address.").optional(),
   })

@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -122,8 +121,6 @@ function CardSkeleton() {
 // ─── Mobile session card ──────────────────────────────────────────────────────
 function SessionCard({
   session,
-  toggling,
-  onToggleForceWin,
   onEdit,
   isDragging,
   dragHandleProps,
@@ -192,7 +189,7 @@ function SessionCard({
             <Pencil size={13} />
           </Button>
 
-          <div className="flex flex-col items-center gap-1">
+          {/* <div className="flex flex-col items-center gap-1">
             <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
               Force Win
             </span>
@@ -208,7 +205,7 @@ function SessionCard({
                 className="data-[state=checked]:bg-primary"
               />
             )}
-          </div>
+          </div> */}
         </div>
       </div>
 
@@ -255,8 +252,6 @@ function FilterPill({
 function DraggableTableRow({
   session,
   index,
-  toggling,
-  onToggleForceWin,
   onEdit,
   onDragStart,
   onDragOver,
@@ -321,7 +316,7 @@ function DraggableTableRow({
           {cfg.label}
         </div>
       </TableCell>
-      <TableCell className="text-center">
+      {/* <TableCell className="text-center">
         {toggling ? (
           <Loader2
             size={15}
@@ -334,7 +329,7 @@ function DraggableTableRow({
             className="data-[state=checked]:bg-primary"
           />
         )}
-      </TableCell>
+      </TableCell> */}
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -777,9 +772,9 @@ function SessionsPage() {
                 <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Status
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">
+                {/* <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">
                   Force Win
-                </TableHead>
+                </TableHead> */}
                 <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">
                   Actions
                 </TableHead>

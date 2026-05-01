@@ -28,20 +28,14 @@ function badgeTextFromSegment(segColor: number): number {
 
 export class HistoryWidget {
   container: Container;
-  // Exposed so App.tsx can register them with FocusManager
-  prevBtnContainer: Container;
-  nextBtnContainer: Container;
+ 
 
   private ctx: GameHistoryContext;
   private rowsContainer: Container;
-  private paginationContainer: Container;
   private panel: Graphics;
   private headerBg: Graphics;
-  private footerBg: Graphics;
   private headerText: Text;
   private pageText: Text;
-  private prevBtnBg: Graphics;
-  private nextBtnBg: Graphics;
   private rows: Container[] = [];
   private unsubscribe: (() => void) | null = null;
   private layout: Layout;
@@ -71,7 +65,7 @@ export class HistoryWidget {
     this.headerText = new Text({
       text: "History",
       style: new TextStyle({
-        fontFamily: "Arial",
+        fontFamily: "Century Gothic",
         fontSize: layout.historyFontMd,
         fill: 0xffffff,
         fontWeight: "bold",
@@ -85,48 +79,18 @@ export class HistoryWidget {
     this.rowsContainer = new Container();
     this.container.addChild(this.rowsContainer);
 
-    // Pagination footer
-    this.paginationContainer = new Container();
-    this.container.addChild(this.paginationContainer);
-
-    this.footerBg = new Graphics();
-    this.paginationContainer.addChild(this.footerBg);
-
-    // Prev button
-    this.prevBtnBg = new Graphics();
-    this.prevBtnContainer = new Container();
-    this.prevBtnContainer.eventMode = "static";
-    this.prevBtnContainer.cursor = "pointer";
-    this.prevBtnContainer.addChild(this.prevBtnBg);
-    const prevTxt = new Text({ text: "‹ Prev", style: new TextStyle({ fontFamily: "Arial", fontSize: 12, fill: 0xffd700, fontWeight: "bold" }) });
-    prevTxt.anchor.set(0.5, 0.5);
-    this.prevBtnContainer.addChild(prevTxt);
-    this.prevBtnContainer.on("pointerdown", () => this.ctx.setPage(this.ctx.getCurrentPage() - 1));
-    this.prevBtnContainer.on("pointerover", () => { this.prevBtnBg.alpha = 1; });
-    this.prevBtnContainer.on("pointerout", () => { this.prevBtnBg.alpha = 0.6; });
-    this.paginationContainer.addChild(this.prevBtnContainer);
+   
+  
 
     // Page label
     this.pageText = new Text({
       text: "1 / 1",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: layout.historyFontSm, fill: 0xaaaacc }),
+      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: layout.historyFontSm, fill: 0xaaaacc }),
     });
     this.pageText.anchor.set(0.5, 0.5);
-    this.paginationContainer.addChild(this.pageText);
+     
 
-    // Next button
-    this.nextBtnBg = new Graphics();
-    this.nextBtnContainer = new Container();
-    this.nextBtnContainer.eventMode = "static";
-    this.nextBtnContainer.cursor = "pointer";
-    this.nextBtnContainer.addChild(this.nextBtnBg);
-    const nextTxt = new Text({ text: "Next ›", style: new TextStyle({ fontFamily: "Arial", fontSize: 12, fill: 0xffd700, fontWeight: "bold" }) });
-    nextTxt.anchor.set(0.5, 0.5);
-    this.nextBtnContainer.addChild(nextTxt);
-    this.nextBtnContainer.on("pointerdown", () => this.ctx.setPage(this.ctx.getCurrentPage() + 1));
-    this.nextBtnContainer.on("pointerover", () => { this.nextBtnBg.alpha = 1; });
-    this.nextBtnContainer.on("pointerout", () => { this.nextBtnBg.alpha = 0.6; });
-    this.paginationContainer.addChild(this.nextBtnContainer);
+  
 
     this.applyLayout(layout);
     this.unsubscribe = this.ctx.subscribe((entries) => this.render(entries));
@@ -171,29 +135,10 @@ export class HistoryWidget {
     this.rowsContainer.x = 0;
     this.rowsContainer.y = this.HEADER_H + this.PAD / 2;
 
-    // Pagination
-    this.paginationContainer.y = this.HEADER_H + this.PAD / 2 + rows * rowH + 4;
-
-    this.footerBg.clear();
-    this.footerBg.rect(0, 0, W, this.FOOTER_H);
-    this.footerBg.fill({ color: 0x091838, alpha: 0.9 });
-
-    // Prev/next button sizing — each takes ~40% of width
-    const btnW = Math.round(W * 0.4);
-    const btnH = Math.round(this.FOOTER_H * 0.7);
+ 
     const btnY = this.FOOTER_H / 2;
 
-    this.prevBtnBg.clear();
-    this.prevBtnBg.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 4);
-    this.prevBtnBg.fill({ color: 0x2a5298, alpha: 0.6 });
-    this.prevBtnContainer.x = btnW / 2 + this.PAD;
-    this.prevBtnContainer.y = btnY;
-
-    this.nextBtnBg.clear();
-    this.nextBtnBg.roundRect(-btnW / 2, -btnH / 2, btnW, btnH, 4);
-    this.nextBtnBg.fill({ color: 0x2a5298, alpha: 0.6 });
-    this.nextBtnContainer.x = W - btnW / 2 - this.PAD;
-    this.nextBtnContainer.y = btnY;
+   
 
     this.pageText.style.fontSize = layout.historyFontSm;
     this.pageText.x = W / 2;
@@ -204,11 +149,7 @@ export class HistoryWidget {
     this.rowsContainer.removeChildren();
     this.rows = [];
 
-    const totalPages = this.ctx.getTotalPages();
-    const currentPage = this.ctx.getCurrentPage();
-    this.pageText.text = `${currentPage + 1}/${totalPages}`;
-    this.prevBtnContainer.alpha = currentPage > 0 ? 1 : 0.3;
-    this.nextBtnContainer.alpha = currentPage < totalPages - 1 ? 1 : 0.3;
+  
 
     const W = this.layout.historyW;
     const rowH = this.layout.historyRowH;
@@ -228,7 +169,7 @@ export class HistoryWidget {
       // Game ID — left aligned
       const idTxt = new Text({
         text: `#${entry.gameId}`,
-        style: new TextStyle({ fontFamily: "Arial", fontSize: fsm, fill: 0x8899cc }),
+        style: new TextStyle({ fontFamily: "Century Gothic", fontSize: fsm, fill: 0x8899cc }),
       });
       idTxt.anchor.set(0, 0.5);
       idTxt.x = PAD;
@@ -249,7 +190,7 @@ export class HistoryWidget {
 
       const letterTxt = new Text({
         text: entry.letter,
-        style: new TextStyle({ fontFamily: "Arial", fontSize: fsm, fill: 0xffd700, fontWeight: "bold" }),
+        style: new TextStyle({ fontFamily: "Century Gothic", fontSize: fsm, fill: 0xffd700, fontWeight: "bold" }),
       });
       letterTxt.anchor.set(0.5, 0.5);
       letterTxt.x = letterBadge.x + letterBadgeW / 2;
@@ -270,7 +211,7 @@ export class HistoryWidget {
 
       const badgeTxt = new Text({
         text: `${entry.points}`,
-        style: new TextStyle({ fontFamily: "Arial", fontSize: fsm, fill: textColor, fontWeight: "bold" }),
+        style: new TextStyle({ fontFamily: "Century Gothic", fontSize: fsm, fill: textColor, fontWeight: "bold" }),
       });
       badgeTxt.anchor.set(0.5, 0.5);
       badgeTxt.x = badge.x + badgeW / 2;
@@ -284,7 +225,7 @@ export class HistoryWidget {
     if (entries.length === 0) {
       const empty = new Text({
         text: "No games yet",
-        style: new TextStyle({ fontFamily: "Arial", fontSize: fsm, fill: 0x5577aa }),
+        style: new TextStyle({ fontFamily: "Century Gothic", fontSize: fsm, fill: 0x5577aa }),
       });
       empty.anchor.set(0.5, 0.5);
       empty.x = this.layout.historyW / 2;

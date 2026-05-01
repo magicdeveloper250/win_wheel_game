@@ -1,4 +1,4 @@
-import { createContext, useState } from "react";
+import { createContext, useCallback, useState } from "react";
 import type { PropsWithChildren } from "react";
 import useSession from "@/hooks/useSession";
 
@@ -38,15 +38,14 @@ export const SocketProvider = ({ children }: PropsWithChildren<{}>) => {
     setSocketData([]);
   };
 
-  const connectWebSocket = (path: string) => {
-    
-
-    const baseUrl = import.meta.env.VITE_WS_URL;
-    const socketUrl = `${baseUrl}${path}${session?.token ? `?token=${session.token}` : ""}`;
+  const connectWebSocket = useCallback((path: string) => {
+    const baseUrl = (import.meta.env.VITE_WS_URL as string).replace(/\/+$/, "");
+    const cleanPath = path === "/" ? "" : path.startsWith("/") ? path : `/${path}`;
+    const socketUrl = `${baseUrl}${cleanPath}${session?.token ? `?token=${session.token}` : ""}`;
 
     const ws = new WebSocket(socketUrl);
     return ws;
-  }
+  }, [session?.token]);
 
   return (
     <SocketContext.Provider

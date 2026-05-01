@@ -3,7 +3,7 @@
 
 import { Container, Graphics, Text, TextStyle, Texture } from "pixi.js";
 import { BevelFilter, DropShadowFilter, OutlineFilter } from "pixi-filters";
-import type { Segment } from "./lib/segments";
+import type { Segment } from "./segments";
 
 
 export function makeGradientTexture(color1: number, color2: number): Texture {
@@ -63,13 +63,15 @@ export function buildRingContainer(
       align: "center",
     });
     const lbl = new Text({ text: seg.label, style });
+    lbl.resolution = 2;
+    lbl.roundPixels = true;
     lbl.anchor.set(0.5, 0.5);
     lbl.x = lx;
     lbl.y = ly;
 
     const isLeftHalf = Math.cos(midA) < 0;
     lbl.rotation = isLeftHalf ? midA - Math.PI / 2 : midA + Math.PI / 2;
-    lbl.filters = [new OutlineFilter(3, 0x000000, 3)];
+    lbl.filters = [new OutlineFilter(2, 0x000000, 1)];
     ring.addChild(lbl);
   });
 

@@ -26,7 +26,7 @@ export class MagnifiedSegmentWidget {
     this.label = new Text({
       text: "",
       style: new TextStyle({
-        fontFamily: "Arial",
+        fontFamily: "Century Gothic",
         fontSize: size * 0.45,
         fontWeight: "bold",
         fill: 0xffffff,

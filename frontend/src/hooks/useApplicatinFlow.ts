@@ -39,7 +39,7 @@ const [isPriorApplication, setIsPriorApplication] = useState(false)
     if (prior) {
         setIsPriorApplication(true)
 
-      setFormState((prev) => ({
+      setFormState((prev: ApplicationFormState) => ({
         ...prev,
         applicationId: prior.id,
         answers: prior.job_responses
@@ -67,7 +67,7 @@ const [isPriorApplication, setIsPriorApplication] = useState(false)
       job_id: job.id,
       job_responses: null,
     })
-    setFormState((prev) => ({ ...prev, applicationId: data.id }))
+      setFormState((prev: ApplicationFormState) => ({ ...prev, applicationId: data.id }))
     setStep(1)
 
   } catch (err: any) {
@@ -90,7 +90,7 @@ const [isPriorApplication, setIsPriorApplication] = useState(false)
         await axios.patch(`/applications/${formState.applicationId}`, {
           job_responses,
         })
-        setFormState((prev) => ({ ...prev, answers }))
+        setFormState((prev: ApplicationFormState) => ({ ...prev, answers }))
         setStep(2)
       } catch {
         setError("Failed to save answers. Please try again.")
@@ -114,7 +114,7 @@ const [isPriorApplication, setIsPriorApplication] = useState(false)
           formData,
           { headers: { "Content-Type": "multipart/form-data" } }
         )
-        setFormState((prev) => ({
+        setFormState((prev: ApplicationFormState) => ({
           ...prev,
           resumeFile: file,
           resumeId: data.id,
@@ -151,7 +151,7 @@ const [isPriorApplication, setIsPriorApplication] = useState(false)
   }, [axios, formState.applicationId, navigate])
 
   const goBack = () => {
-    if (step > 0) setStep((prev) => (prev - 1) as ApplicationStep)
+    if (step > 0) setStep((prev: ApplicationStep) => (prev - 1) as ApplicationStep)
   }
 
   return {

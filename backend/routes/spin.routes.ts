@@ -16,8 +16,8 @@ router.get("/spin/next", authenticate, async (req, res) => {
 router.post("/spin", authenticate, async (req, res) => {
   try {
     const { winNumber } = req.body;
-    if (winNumber == null || typeof winNumber !== "number") {
-      return res.status(400).json({ error: "winNumber (number) is required." });
+    if (winNumber != null && typeof winNumber !== "number") {
+      return res.status(400).json({ error: "winNumber must be a number when provided." });
     }
     res.json(await spin({ winNumber }));
   } catch (error: any) {

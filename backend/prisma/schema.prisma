@@ -7,138 +7,154 @@ datasource db {
   provider = "mysql"
 }
 
-
-model User{
-  id                  String                @unique @default("")
+model User {
+  id                  String               @unique @default("")
   name                String
-  email               String                @unique
-  phone               String?               @unique
+  email               String               @unique
+  phone               String?              @unique
   password            String
   role                String
-  createdAt           DateTime?             @default(now())
-  updatedAt           DateTime              @updatedAt
+  createdAt           DateTime?            @default(now())
+  updatedAt           DateTime             @updatedAt
   gameBets            GameBet[]
-
   transactions        Transaction[]
-
   userSessions        UserSession[]
-
   passwordResetTokens PasswordResetToken[]
+  userAccounts        UserAccount[]
 }
 
-model GameSession{
-  id            String             @unique @default("")
+model GameSession {
+  id            String            @unique @default("")
   duration      Int
-  sessionNumber Int                @unique @default(0)
-  shouldWin     Boolean
+  sessionNumber Int               @unique @default(0)
+  shouldWin     Boolean?           @default(true)
   multiplierId  String
-  createdAt     DateTime?          @default(now())
-  updatedAt     DateTime           @updatedAt
-  status        GameSessionStatus  @default(UPCOMING)
-  multiplier    GameWinMultiplier @relation(fields: [multiplierId], references: [id])
-  gameResults   GameResult[]
-
-  gameBets      GameBet[]
+  createdAt     DateTime?         @default(now())
+  updatedAt     DateTime          @updatedAt
+  status        GameSessionStatus @default(UPCOMING)
+  multiplier    GameWinMultiplier @relation(fields: [multiplierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  betSessions   BetSession[]
 }
 
-model GameBet{
-  id           String       @unique @default("")
+model BetSession {
+  id          String            @unique @default("")
+  sessionId   String
+  session     GameSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt   DateTime?         @default(now())
+  updatedAt   DateTime          @updatedAt
+  status      GameSessionStatus @default(ACTIVE)
+  resultId    String?
+  result      GameResult?       @relation("BetSessionResult", fields: [resultId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  startTime   DateTime?         @default(now())
+  endTime     DateTime?
+  gameBets    GameBet[]
+  gameResults GameResult[]      @relation("GameResultSession")
+}
+
+model GameBet {
+  id           String     @unique @default("")
   userId       String
-  user         User        @relation(fields: [userId], references: [id])
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   targetNumber Int
   amount       Decimal
   sessionId    String
-  session      GameSession @relation(fields: [sessionId], references: [id])
-  createdAt    DateTime?    @default(now())
-  updatedAt    DateTime     @updatedAt
-
+  session      BetSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt    DateTime?  @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
-model GameResult{
-  id            String       @unique @default("")
-  sessionId     String
-  session       GameSession @relation(fields: [sessionId], references: [id])
+model UserAccount {
+  id        String    @unique @default("")
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  balance   Decimal
+  createdAt DateTime? @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model GameResult {
+  id            String     @unique @default("")
+  sessionId     String     @unique
+  session       BetSession @relation("GameResultSession", fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   winNumber     Int
   winMultiplier Decimal
-  createdAt     DateTime?    @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime?  @default(now())
+  updatedAt     DateTime   @updatedAt
+  betSessions   BetSession[] @relation("BetSessionResult")
 }
 
-model Transaction{
-  id        String     @unique @default("")
+model Transaction {
+  id        String    @unique @default("")
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   amount    Decimal
   type      String
   tax       Decimal
-  createdAt DateTime?  @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime? @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
- 
-
-model AuditLog{
-  id        String     @unique @default("")
+model AuditLog {
+  id        String    @unique @default("")
   action    String
   details   String
-  createdAt DateTime?  @default(now())
+  createdAt DateTime? @default(now())
 }
 
-model SystemConfig{
-  id        String     @unique @default("")
-  key       String     @unique
+model SystemConfig {
+  id        String    @unique @default("")
+  key       String    @unique
   value     String
-  createdAt DateTime?  @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime? @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-model UserSession{
-  id        String     @unique @default("")
+model UserSession {
+  id        String    @unique @default("")
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  token     String     @unique
-  createdAt DateTime?  @default(now())
-  updatedAt DateTime   @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  token     String    @unique
+  createdAt DateTime? @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-model PasswordResetToken{
-  id        String     @unique @default("")
+model PasswordResetToken {
+  id        String    @unique @default("")
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  token     String     @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  token     String    @unique
   expiresAt DateTime
-  createdAt DateTime?  @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime? @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-model GameFinancialSetting{
-  id                  String     @unique @default("")
+model GameFinancialSetting {
+  id                  String    @unique @default("")
   maxBetAmount        Decimal
   minBetAmount        Decimal
   taxPercentage       Decimal
   houseEdgePercentage Decimal
-  createdAt           DateTime?  @default(now())
-  updatedAt           DateTime   @updatedAt
+  createdAt           DateTime? @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
-model GameTargetNumber{
-  id           String     @unique @default("")
+model GameTargetNumber {
+  id           String    @unique @default("")
   targetNumber Int
   color        String?
-  createdAt    DateTime?  @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime? @default(now())
+  updatedAt    DateTime  @updatedAt
 }
-model GameWinMultiplier{
-  id               String     @unique @default("")
+
+model GameWinMultiplier {
+  id               String        @unique @default("")
   multiplierLetter String
   winMultiplier    Decimal
   color            String?
-  createdAt        DateTime?  @default(now())
-  updatedAt        DateTime   @updatedAt
-
-  gameSessions GameSession[]
+  createdAt        DateTime?     @default(now())
+  updatedAt        DateTime      @updatedAt
+  gameSessions     GameSession[]
 }
-
 
 enum GameSessionStatus {
   UPCOMING

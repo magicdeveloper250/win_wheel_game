@@ -37,7 +37,7 @@ export class ResultOverlayWidget {
     // Letter (large, left side)
     this.letterTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 28, fill: 0xffd700, fontWeight: "bold" }),
+      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 28, fill: 0xffd700, fontWeight: "bold" }),
     });
     this.letterTxt.anchor.set(0.5, 0.5);
     this.card.addChild(this.letterTxt);
@@ -45,7 +45,7 @@ export class ResultOverlayWidget {
     // Result message
     this.msgTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 13, fill: 0xffffff, fontWeight: "bold" }),
+      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 13, fill: 0xffffff, fontWeight: "bold" }),
     });
     this.msgTxt.anchor.set(0, 0.5);
     this.card.addChild(this.msgTxt);
@@ -53,7 +53,7 @@ export class ResultOverlayWidget {
     // Points
     this.ptsTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 20, fill: 0x7cfc00, fontWeight: "bold" }),
+      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 20, fill: 0x7cfc00, fontWeight: "bold" }),
     });
     this.ptsTxt.anchor.set(0, 0.5);
     this.card.addChild(this.ptsTxt);
@@ -61,7 +61,7 @@ export class ResultOverlayWidget {
     // "tap to dismiss" hint — bottom right corner
     this.dismissTxt = new Text({
       text: "tap to dismiss",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 10, fill: 0xffffff }),
+      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 10, fill: 0xffffff }),
     });
     this.dismissTxt.alpha = 0.45;
     this.dismissTxt.anchor.set(1, 1);

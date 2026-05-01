@@ -6,6 +6,7 @@ export interface Session {
   phone: string
   role: string
   token: string
+  balance: number
 }
 interface SessionProps {
   session?: Session

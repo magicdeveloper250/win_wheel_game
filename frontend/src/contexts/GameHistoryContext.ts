@@ -21,9 +21,9 @@ export class GameHistoryContext {
   readonly PAGE_SIZE = 12;
   private currentPage: number = 0;
 
-  addEntry(letter: string, number: number, points: number, segmentColor: number): HistoryEntry {
+  addEntry(gameId: number, letter: string, number: number, points: number, segmentColor: number): HistoryEntry {
     const entry: HistoryEntry = {
-      gameId: ++this.gameIdCounter,
+      gameId,
       letter,
       number,
       points,
@@ -39,6 +39,21 @@ export class GameHistoryContext {
     this.notify();
     return entry;
   }
+addEntries(entries: HistoryEntry[]): void {
+  this.entries = entries.map((e) => ({
+    ...e,
+    gameId: e.gameId,
+    timestamp: Date.now(),
+  }));
+
+  // Keep only up to maxEntries
+  if (this.entries.length > this.maxEntries) {
+    this.entries = this.entries.slice(0, this.maxEntries);
+  }
+
+  this.currentPage = 0; // reset to first page
+  this.notify();
+}
 
   getCurrentGameId(): number {
     return this.gameIdCounter + 1;

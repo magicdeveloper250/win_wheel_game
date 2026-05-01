@@ -37,7 +37,6 @@ export class FocusManager {
   private items: FocusItem[] = [];
   private focusedIndex: number = -1;
   private focusRing: Graphics;
-  private app: Application;
   private activeGroup: string = "default";
   private keyHandler: (e: KeyboardEvent) => void;
   private ringPad = 6;
@@ -45,8 +44,6 @@ export class FocusManager {
   private ringWidth = 3;
 
   constructor(app: Application) {
-    this.app = app;
-
     // Focus ring drawn on top of everything
     this.focusRing = new Graphics();
     this.focusRing.visible = false;

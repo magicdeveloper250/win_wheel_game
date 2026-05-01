@@ -57,7 +57,7 @@ export function computeLayout(W: number, H: number): Layout {
   const pad = Math.round(5 * uiScale);
 
   const headerH    = Math.round(Math.max(36, 44 * uiScale));
-  const statusBarH = Math.round(Math.max(48, 60 * uiScale));
+  const statusBarH = Math.round(Math.max(64, 78 * uiScale));
 
   // ── History panel widths ──────────────────────────────────────────────────
   let historyW = 0;
@@ -66,17 +66,17 @@ export function computeLayout(W: number, H: number): Layout {
     historyW = 0;
     historyVisible = false;
   } else if (mode === "phone-landscape") {
-    historyW = Math.round(Math.min(160, W * 0.22));
+    historyW = Math.round(Math.min(220, W * 0.30));
     historyVisible = true;
   } else if (mode === "tablet") {
-    historyW = Math.round(Math.min(200, W * 0.22));
+    historyW = Math.round(Math.min(280, W * 0.29));
     historyVisible = true;
   } else if (mode === "tv") {
-    historyW = Math.round(Math.min(320, W * 0.14));
+    historyW = Math.round(Math.min(420, W * 0.20));
     historyVisible = true;
   } else {
-    // desktop — shrink history panel to give wheel more room
-    historyW = Math.round(Math.min(180, W * 0.13));
+    // desktop
+    historyW = Math.round(Math.min(270, W * 0.21));
     historyVisible = true;
   }
 

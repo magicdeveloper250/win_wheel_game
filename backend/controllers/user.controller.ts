@@ -19,7 +19,8 @@ export const getUserByEmail = async (email: string) => {
 export const getUserById = async (id: string) => {
   try {
     const user = await prisma.user.findUnique({ where: { id } });
-    return user ?? null;
+    const userAccount= await prisma.userAccount.findFirst({where:{userId:id}});
+    return user ? {...user , balance: userAccount?.balance ?? 0} : null;
   } catch {
     return { error: "An error occurred while fetching the user." };
   }
@@ -69,12 +70,12 @@ export const createUser = async (params: {
   password: string;
 }) => {
   try {
-    const existing = await prisma.user.findUnique({
-      where: { email: params.email },
+    const existing = await prisma.user.findFirst({
+      where: {OR: [{email: params.email},{ phone:params.phone}]},
     });
 
     if (existing) {
-      return { error: "A user with this email already exists." };
+      return { error: "A user with this email/phone  already exists." };
     }
 
     const hashedPassword = await bcrypt.hash(params.password, SALT_ROUNDS);
@@ -92,8 +93,9 @@ export const createUser = async (params: {
     });
 
     return user;
-  } catch {
-    return { error: "An error occurred while creating the user." };
+  } catch(e) {
+    
+    return { error: "An error occurred while creating the user." + e };
   }
 };
 
@@ -213,9 +215,10 @@ export const verifyUserPassword = async (
     if (!isValid) {
       return { error: "Invalid email or password." };
     }
+    const userAccount= await prisma.userAccount.findFirst({where:{userId:user.id}});
 
     const { password: _, ...userWithoutPassword } = user;
-    return { ...userWithoutPassword , user_id:userWithoutPassword.id};
+    return { ...userWithoutPassword , user_id:userWithoutPassword.id, balance: userAccount?.balance ?? 0 };
   } catch {
     return { error: "An error occurred while verifying the password." };
   }

@@ -36,7 +36,7 @@ export const getAdminDashboard = async () => {
       orderBy: { createdAt: "desc" },
       include: {
         user: { select: { id: true, name: true } },
-        session: { select: { id: true, sessionNumber: true } },
+        session: { include: { session: { select: { sessionNumber: true } } } },
       },
     }),
   ]);

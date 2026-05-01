@@ -190,3 +190,20 @@ export const reorderSessions = async (
     throw { error: "Failed to reorder sessions" };
   }
 };
+
+export const getActiveSession = async (userId: string) => {
+  try {
+    let active = await prisma.betSession.findFirst({
+      where: { status: GameSessionStatus.ACTIVE },
+      include: { session: { include: { multiplier: true } } },
+    });
+    let alreadyBeenBettedOn = await prisma.gameBet.findFirst({
+      where: { sessionId: active?.id, userId },
+    });
+
+    return { ...active, betted: !!alreadyBeenBettedOn };
+  } catch (error) {
+    console.error(error);
+    throw { error: "An error occurred while fetching the active session." };
+  }
+};

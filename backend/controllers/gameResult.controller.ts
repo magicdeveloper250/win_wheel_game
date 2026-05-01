@@ -6,9 +6,9 @@ export const recordResult = async (params: {
   winNumber: number;
   winMultiplier: number;
 }) => {
-  const session = await prisma.gameSession.findUnique({
+  const session = await prisma.betSession.findUnique({
     where: { id: params.sessionId },
-    include: { gameBets: true, multiplier: true },
+    include: { gameBets: true,  session: { include: { multiplier: true } } },
   });
   if (!session) throw { error: "Session not found." };
   if (session.status === GameSessionStatus.COMPLETED)
@@ -65,7 +65,7 @@ export const getResults = async (params: {
     prisma.gameResult.findMany({
       where,
       include: {
-        session: { select: { id: true, sessionNumber: true, multiplier: true } },
+        session: { include: { session: { select: { sessionNumber: true } } } },
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,

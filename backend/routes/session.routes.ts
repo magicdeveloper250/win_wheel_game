@@ -7,6 +7,7 @@ import {
   updateSession,
   deleteSession,
   reorderSessions,
+  getActiveSession,
 } from "../controllers/session.controller";
 
 const router = Router();
@@ -19,7 +20,16 @@ router.get("/sessions", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Unable to fetch game sessions" });
   }
 });
-
+router.get("/sessions/active", authenticate, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const session = await getActiveSession(userId);
+    return res.json(session);
+  } catch (error) {
+    console.error(error);
+    return res.status(404).json({ error: error });
+  }
+});
 router.get("/sessions/:id", authenticate, async (req, res) => {
   try {
     const id = req.params.id as string;
@@ -33,7 +43,7 @@ router.get("/sessions/:id", authenticate, async (req, res) => {
 router.post("/sessions", authenticate, async (req, res) => {
   try {
     const { duration, shouldWin, multiplier } = req.body;
-    console.log(req.body)
+    console.log(req.body);
 
     if (
       duration === undefined ||
@@ -45,7 +55,11 @@ router.post("/sessions", authenticate, async (req, res) => {
         .json({ error: "duration, shouldWin, and multiplier are required" });
     }
 
-    const session = await createSession({ duration, shouldWin, multiplierId:multiplier });
+    const session = await createSession({
+      duration,
+      shouldWin,
+      multiplierId: multiplier,
+    });
     return res.status(201).json(session);
   } catch (error) {
     return res.status(500).json({ error: "Unable to create game session" });
@@ -70,7 +84,10 @@ router.patch("/sessions/reorder", authenticate, async (req, res) => {
 router.patch("/sessions/:id", authenticate, async (req, res) => {
   try {
     const id = req.params.id as string;
-    const session = await updateSession(id, {...req.body, multiplierId:req.body.multiplier});
+    const session = await updateSession(id, {
+      ...req.body,
+      multiplierId: req.body.multiplier,
+    });
     return res.json(session);
   } catch (error) {
     return res.status(500).json({ error: "Unable to update game session" });

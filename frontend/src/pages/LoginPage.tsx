@@ -5,10 +5,11 @@ import Logo from "@/components/ui/Logo";
 import { usePermissions } from "@/contexts/PermissionContext";
 import useSession from "@/hooks/useSession";
 import useUserAxios from "@/hooks/useUserAxios";
+import { UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 interface LoginData {
   email: string;
   password: string;
@@ -37,7 +38,11 @@ function LoginPage() {
       });
       refresh();
       setSession(resp.data);
+     if(resp.data.role === UserRole.ADMIN){
       navigate("/dashboard");
+     } else {
+      navigate("/app");
+     }
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Invalid email or password.");
     } finally {
@@ -46,12 +51,18 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen items-center align-middle justify-center">
-      <Logo />
+    <div className="flex flex-col h-screen items-center align-middle justify-center px-4">
       <form
-        className="flex flex-col gap-4 p-4 rounded bg-primary/10"
+        className="w-full max-w-md flex flex-col gap-4 p-5 rounded-lg border border-border bg-primary/10"
         onSubmit={handleLogin}
       >
+        <div className="flex justify-center">
+          <Logo />
+        </div>
+        <div className="text-center">
+          <h1 className="text-xl font-bold">Login</h1>
+          <p className="text-sm text-muted-foreground">Welcome back</p>
+        </div>
         <div>
           <label htmlFor="email">Email</label>
           <Input
@@ -99,6 +110,12 @@ function LoginPage() {
             )}{" "}
           </Button>
         </div>
+        <p className="text-sm text-center text-muted-foreground">
+          Don't have an account?{" "}
+          <Link to="/register" className="text-primary hover:underline">
+            Register
+          </Link>
+        </p>
       </form>
     </div>
   );

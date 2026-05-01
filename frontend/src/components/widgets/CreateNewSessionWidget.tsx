@@ -15,7 +15,6 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { errMsg } from "@/lib/utils"
 import useUserAxios from "@/hooks/useUserAxios"
-import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -186,7 +185,7 @@ useEffect(() => {
               </Select>
             </div>
 
-            <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2.5">
+            {/* <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2.5">
               <div className="flex flex-col gap-0.5">
                 <Label htmlFor="shouldWin" className="text-foreground text-sm leading-none">
                   Should Win
@@ -202,7 +201,7 @@ useEffect(() => {
                   setFormData((prev) => ({ ...prev, shouldWin: checked }))
                 }
               />
-            </div>
+            </div> */}
           </div>
 
           <DialogFooter className="gap-2">

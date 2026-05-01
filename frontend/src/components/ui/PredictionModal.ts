@@ -1,223 +1,472 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
-import { DropShadowFilter } from "pixi-filters";
-import type { PredictionContext, PredictionState } from "@/contexts/PredictionContext";
+import type {
+  PredictionContext,
+  PredictionState,
+} from "@/contexts/PredictionContext";
 import type { FocusManager } from "@/managers/FocusManager";
+import type { Segment } from "@/lib/segments";
 
-const RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
-
-function numFill(n: number): number {
-  if (n === 0) return 0x1a7a3a;
-  return RED_NUMBERS.has(n) ? 0x9b1c1c : 0x1a1a2e;
-}
-function numStroke(n: number): number {
-  if (n === 0) return 0x27ae60;
-  return RED_NUMBERS.has(n) ? 0xc0392b : 0x444466;
-}
-
-export class PredictionModal {
+export class PredictionPanel {
   container: Container;
+  segments: Segment[] = [];
   private ctx: PredictionContext;
   private focusManager: FocusManager | null;
   private unsubscribe: (() => void) | null = null;
 
   onConfirm: (() => void) | null = null;
 
+  // ── Multi-select state ───────────────────────────────────────────────────
+  private selectedNumbers: Set<number> = new Set();
+
   // ── Stored layout values ─────────────────────────────────────────────────
-  private modalW = 520;
-  private modalH = 580;
+  private panelW = 400;
+  private panelH = 320;
   private inputX = 0;
   private inputY = 0;
   private inputW = 0;
   private inputH = 0;
+  private inputLogicalW = 0;
+  private inputLogicalH = 0;
 
-  // Confirm button DOM overlay position (for TV tab nav)
-  private confirmDomX = 0;
-  private confirmDomY = 0;
-  private confirmDomW = 0;
-  private confirmDomH = 0;
-
-  private backdrop: Graphics;
-  private card: Container;
-  private cardBg: Graphics;
+  private panelBg: Graphics;
   private titleTxt: Text;
-  private subtitleTxt: Text;
   private gridContainer: Container;
-  private cells: Map<number, { bg: Graphics; root: Container; cellSize: number }> = new Map();
+  private cells: Map<
+    Segment,
+    { bg: Graphics; root: Container; cellSize: number }
+  > = new Map();
   private selectionBar: Container;
   private selectionBg: Graphics;
   private selectionTxt: Text;
 
-  // Amount input — real HTML input overlaid on the canvas
   private amountInputEl: HTMLInputElement | null = null;
   private amountInputWrapper: HTMLDivElement | null = null;
-
-  // Transparent DOM button for TV Tab navigation to confirm
-  private confirmDomBtn: HTMLButtonElement | null = null;
+  private amountFocusProxy: Container;
+  private amountFocusBg: Graphics;
+  private amountStepButtons: Array<{
+    delta: number;
+    root: Container;
+    bg: Graphics;
+    txt: Text;
+  }> = [];
+  private chipButtons: Array<{
+    value: number;
+    root: Container;
+    bg: Graphics;
+    txt: Text;
+  }> = [];
 
   private confirmBtn: Container;
   private confirmBg: Graphics;
   private confirmTxt: Text;
-
   private errorTxt: Text;
 
-  private animFrame: number | null = null;
-  private visible_ = false;
+  private enabled_ = true;
+  private submitting_ = false;
+  private amountOverlayVisible_ = true;
 
-  private wheelNumbers: number[] = [];
-
-  constructor(ctx: PredictionContext, focusManager: FocusManager | null = null) {
+  constructor(
+    ctx: PredictionContext,
+    focusManager: FocusManager | null = null,
+    segments: Segment[] = [],
+  ) {
     this.ctx = ctx;
     this.focusManager = focusManager;
     this.container = new Container();
-    this.container.visible = false;
+    this.container.visible = true;
     this.container.eventMode = "static";
+    this.segments = segments;
 
-    this.backdrop = new Graphics();
-    this.backdrop.eventMode = "static";
-    this.container.addChild(this.backdrop);
+    // ── Panel background ─────────────────────────────────────────────────
+    this.panelBg = new Graphics();
+    this.container.addChild(this.panelBg);
 
-    this.card = new Container();
-    this.card.filters = [
-      new DropShadowFilter({ offset: { x: 0, y: 12 }, blur: 24, alpha: 0.85, color: 0x000000 }),
-    ];
-    this.container.addChild(this.card);
-
-    this.cardBg = new Graphics();
-    this.card.addChild(this.cardBg);
-
+    // ── Title ────────────────────────────────────────────────────────────
     this.titleTxt = new Text({
-      text: "Place Your Bet",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 20, fill: 0xffd700, fontWeight: "bold" }),
+      text: "PLACE YOUR BET",
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 13,
+        fill: 0xffd700,
+        fontWeight: "bold",
+        letterSpacing: 2,
+      }),
     });
     this.titleTxt.anchor.set(0.5, 0.5);
-    this.card.addChild(this.titleTxt);
+    this.container.addChild(this.titleTxt);
 
-    this.subtitleTxt = new Text({
-      text: "Pick a number and enter your bet amount",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 12, fill: 0xaaccff, align: "center" }),
-    });
-    this.subtitleTxt.anchor.set(0.5, 0.5);
-    this.card.addChild(this.subtitleTxt);
-
+    // ── Number grid ──────────────────────────────────────────────────────
     this.gridContainer = new Container();
-    this.card.addChild(this.gridContainer);
+    this.container.addChild(this.gridContainer);
 
+    // ── Selection bar ────────────────────────────────────────────────────
     this.selectionBar = new Container();
-    this.card.addChild(this.selectionBar);
+    this.container.addChild(this.selectionBar);
     this.selectionBg = new Graphics();
     this.selectionBar.addChild(this.selectionBg);
     this.selectionTxt = new Text({
-      text: "No number selected",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 13, fill: 0x888888, align: "center" }),
+      text: "No numbers selected",
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 11,
+        fill: 0x888888,
+        align: "center",
+      }),
     });
     this.selectionTxt.anchor.set(0.5, 0.5);
     this.selectionBar.addChild(this.selectionTxt);
 
+    // ── Error text ───────────────────────────────────────────────────────
     this.errorTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 11, fill: 0xff4444, align: "center" }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 10,
+        fill: 0xff4444,
+        align: "center",
+      }),
     });
     this.errorTxt.anchor.set(0.5, 0.5);
-    this.card.addChild(this.errorTxt);
+    this.container.addChild(this.errorTxt);
 
+    this.amountFocusProxy = new Container();
+    this.amountFocusProxy.eventMode = "static";
+    this.amountFocusProxy.cursor = "text";
+    this.amountFocusBg = new Graphics();
+    this.amountFocusBg.alpha = 0.001;
+    this.amountFocusProxy.addChild(this.amountFocusBg);
+    this.amountFocusProxy.on("pointerdown", () => this.focusAmountInput());
+    this.container.addChild(this.amountFocusProxy);
+
+    const stepButtons = [
+      { delta: -100, label: "-" },
+      { delta: 100, label: "+" },
+    ];
+    stepButtons.forEach(({ delta, label }) => {
+      const root = new Container();
+      root.eventMode = "static";
+      root.cursor = "pointer";
+      const bg = new Graphics();
+      root.addChild(bg);
+      const txt = new Text({
+        text: label,
+        style: new TextStyle({
+          fontFamily: "Century Gothic",
+          fontSize: 18,
+          fill: 0xffffff,
+          fontWeight: "bold",
+        }),
+      });
+      txt.anchor.set(0.5, 0.5);
+      root.addChild(txt);
+      root.on("pointerdown", () => this._incrementAmount(delta));
+      root.on("pointerover", () => {
+        bg.tint = 0x334155;
+      });
+      root.on("pointerout", () => {
+        bg.tint = 0xffffff;
+      });
+      this.amountStepButtons.push({ delta, root, bg, txt });
+      this.container.addChild(root);
+    });
+
+    const chipValues = [200, 400, 500, 1000];
+    chipValues.forEach((value) => {
+      const root = new Container();
+      root.eventMode = "static";
+      root.cursor = "pointer";
+      const bg = new Graphics();
+      root.addChild(bg);
+      const txt = new Text({
+        text: `+${value}`,
+        style: new TextStyle({
+          fontFamily: "Century Gothic",
+          fontSize: 13,
+          fill: 0xffffff,
+          fontWeight: "bold",
+        }),
+      });
+      txt.anchor.set(0.5, 0.5);
+      root.addChild(txt);
+      root.on("pointerdown", () => this._incrementAmount(value));
+      root.on("pointerover", () => {
+        bg.tint = 0x334155;
+      });
+      root.on("pointerout", () => {
+        bg.tint = 0xffffff;
+      });
+      this.chipButtons.push({ value, root, bg, txt });
+      this.container.addChild(root);
+    });
+
+    // ── Confirm button ───────────────────────────────────────────────────
     this.confirmBtn = new Container();
     this.confirmBtn.eventMode = "static";
     this.confirmBtn.cursor = "pointer";
-    this.card.addChild(this.confirmBtn);
+    this.container.addChild(this.confirmBtn);
     this.confirmBg = new Graphics();
     this.confirmBtn.addChild(this.confirmBg);
     this.confirmTxt = new Text({
       text: "✓  Confirm Bet",
-      style: new TextStyle({ fontFamily: "Arial", fontSize: 15, fill: 0x1a1a1a, fontWeight: "bold" }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 13,
+        fill: 0x1a1a1a,
+        fontWeight: "bold",
+      }),
     });
     this.confirmTxt.anchor.set(0.5, 0.5);
     this.confirmBtn.addChild(this.confirmTxt);
     this.confirmBtn.on("pointerdown", () => this._handleConfirm());
-    this.confirmBtn.on("pointerover", () => { this.confirmBg.tint = 0xfbbf24; });
-    this.confirmBtn.on("pointerout",  () => { this.confirmBg.tint = 0xffffff; });
+    this.confirmBtn.on("pointerover", () => {
+      this.confirmBg.tint = 0xfbbf24;
+    });
+    this.confirmBtn.on("pointerout", () => {
+      this.confirmBg.tint = 0xffffff;
+    });
 
     if (focusManager) {
-      focusManager.addItem(this.confirmBtn, () => this._handleConfirm(), { group: "modal", label: "Confirm bet" });
+      focusManager.addItem(
+        this.amountFocusProxy,
+        () => this.focusAmountInput(),
+        { group: "default", label: "Bet amount input" },
+      );
+      this.amountStepButtons.forEach((chip) => {
+        focusManager.addItem(
+          chip.root,
+          () => this._incrementAmount(chip.delta),
+          {
+            group: "default",
+            label: chip.delta > 0 ? "Increase amount" : "Decrease amount",
+          },
+        );
+      });
+      this.chipButtons.forEach((chip) => {
+        focusManager.addItem(
+          chip.root,
+          () => this._incrementAmount(chip.value),
+          {
+            group: "default",
+            label: `Add ${chip.value}`,
+          },
+        );
+      });
+      focusManager.addItem(this.confirmBtn, () => this._handleConfirm(), {
+        group: "default",
+        label: "Confirm bet",
+      });
     }
 
     this.unsubscribe = this.ctx.subscribe((s) => this._updateState(s));
   }
 
-  setWheelNumbers(numbers: number[]) {
-    this.wheelNumbers = numbers;
+  // ── Public: get current multi-selection ─────────────────────────────────
+  getSelectedNumbers(): number[] {
+    return Array.from(this.selectedNumbers);
   }
 
-  private _handleConfirm() {
-    const state = this.ctx.getState();
-    if (state.selected === null) {
-      this.errorTxt.text = "Please select a number first.";
-      return;
+  // ── Toggle a number in the multi-select set ──────────────────────────────
+  private _toggleNumber(value: number) {
+    if (this.selectedNumbers.has(value)) {
+      this.selectedNumbers.delete(value);
+    } else {
+      this.selectedNumbers.add(value);
     }
-    const amt = parseFloat(state.amount);
-    if (isNaN(amt) || amt <= 0) {
-      this.errorTxt.text = "Please enter a valid bet amount.";
-      return;
-    }
-    this.errorTxt.text = "";
-    this.onConfirm?.();
+    this._refreshCellHighlights();
+    this._refreshSelectionBar();
   }
 
-  // ── layout() ─────────────────────────────────────────────────────────────
-  layout(W: number, H: number): void {
-    if (this.visible_) {
-      this._repositionInput();
-      this._repositionConfirmDomBtn();
-      return;
+  private _refreshCellHighlights() {
+    this.cells.forEach(({ bg, root, cellSize }, seg) => {
+      const sel = this.selectedNumbers.has(Number(seg.value));
+      bg.clear();
+      bg.roundRect(0, 0, cellSize, cellSize, 4);
+      bg.fill({ color: seg.color });
+      if (sel) {
+        bg.stroke({ color: 0x22c55e, width: 3 });
+        bg.roundRect(2, 2, cellSize - 4, cellSize - 4, 4);
+        bg.stroke({ color: 0x86efac, width: 1.5, alpha: 0.95 });
+      } else {
+        bg.stroke({ color: seg.color, width: 1 });
+      }
+      root.zIndex = sel ? 10 : 0;
+    });
+  }
+
+  private _refreshSelectionBar() {
+    const mW = this.panelW;
+    const PAD = Math.round(mW * 0.055);
+    const selW = mW - PAD * 2;
+    const selH = Math.round(this.panelH * 0.07);
+
+    if (this.selectedNumbers.size > 0) {
+      const nums = Array.from(this.selectedNumbers)
+        .sort((a, b) => a - b)
+        .join(", ");
+      const count = this.selectedNumbers.size;
+      const amountPerNumber = parseFloat(this.ctx.getState().amount) || 0;
+      const totalAmount = amountPerNumber * count;
+
+      // ✅ Show count, numbers, and total bet amount
+      const numLine =
+        count === 1 ? `Selected: ${nums}` : `Selected (${count}) `;
+      const totalLine =
+        amountPerNumber > 0
+          ? `  |  Total bet: ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "";
+
+      this.selectionTxt.text = numLine + totalLine;
+      this.selectionTxt.style.fill = 0x86efac;
+      this.selectionTxt.style.fontWeight = "bold";
+      this.selectionTxt.style.fontSize = Math.max(
+        10,
+        Math.round(this.panelW * (count > 5 ? 0.026 : 0.034)),
+      );
+      this.selectionBg.clear();
+      this.selectionBg.roundRect(0, 0, selW, selH, 6);
+      this.selectionBg.fill({ color: 0x0a2218 });
+      this.selectionBg.stroke({ color: 0x22c55e, width: 1.5 });
+    } else {
+      this.selectionTxt.text = "No numbers selected — tap to pick";
+      this.selectionTxt.style.fill = 0x666688;
+      this.selectionTxt.style.fontWeight = "normal";
+      this.selectionTxt.style.fontSize = Math.max(
+        12,
+        Math.round(this.panelW * 0.032),
+      );
+      this.selectionBg.clear();
+      this.selectionBg.roundRect(0, 0, selW, selH, 6);
+      this.selectionBg.fill({ color: 0x112244 });
+      this.selectionBg.stroke({ color: 0x334477, width: 1 });
     }
+  }
 
-    this.modalW = Math.min(520, Math.round(W * 0.88));
-    this.modalH = Math.min(680, Math.round(H * 0.92));   // slightly taller to fit bigger input
+  setEnabled(enabled: boolean) {
+    this.enabled_ = enabled;
+    const interactive = enabled && !this.submitting_;
+    this.container.alpha = enabled ? 1 : 0.4;
+    this.confirmBtn.eventMode = interactive ? "static" : "none";
+    this.gridContainer.eventMode = interactive ? "static" : "none";
+    this.amountStepButtons.forEach((chip) => {
+      chip.root.eventMode = interactive ? "static" : "none";
+    });
+    this.chipButtons.forEach((chip) => {
+      chip.root.eventMode = interactive ? "static" : "none";
+    });
+    if (this.amountInputEl) {
+      this.amountInputEl.disabled = !interactive;
+      this.amountInputEl.tabIndex = interactive ? 1 : -1;
+      if (!interactive) this.amountInputEl.blur();
+    }
+    if (this.amountInputWrapper) {
+      this.amountInputWrapper.style.display =
+        enabled && this.amountOverlayVisible_ ? "flex" : "none";
+      this.amountInputWrapper.style.pointerEvents = interactive
+        ? "auto"
+        : "none";
+    }
+    this._refreshConfirmButton();
+  }
 
-    const mW  = this.modalW;
-    const mH  = this.modalH;
-    const PAD = Math.round(mW * 0.05);
-    const cx  = mW / 2;
-    const cardX = Math.round((W - mW) / 2);
-    const cardY = Math.round((H - mH) / 2);
+  setSubmitting(submitting: boolean) {
+    this.submitting_ = submitting;
+    const interactive = this.enabled_ && !this.submitting_;
+    this.confirmBtn.eventMode = interactive ? "static" : "none";
+    this.gridContainer.eventMode = interactive ? "static" : "none";
+    this.amountStepButtons.forEach((chip) => {
+      chip.root.eventMode = interactive ? "static" : "none";
+    });
+    this.chipButtons.forEach((chip) => {
+      chip.root.eventMode = interactive ? "static" : "none";
+    });
+    if (this.amountInputEl) {
+      this.amountInputEl.disabled = !interactive;
+      this.amountInputEl.tabIndex = interactive ? 1 : -1;
+      if (!interactive) this.amountInputEl.blur();
+    }
+    if (this.amountInputWrapper) {
+      this.amountInputWrapper.style.pointerEvents = interactive
+        ? "auto"
+        : "none";
+    }
+    this._refreshConfirmButton();
+  }
 
-    // Backdrop
-    this.backdrop.clear();
-    this.backdrop.rect(0, 0, W, H);
-    this.backdrop.fill({ color: 0x000000, alpha: 0.75 });
+ private _handleConfirm() {
+  if (!this.enabled_ || this.submitting_) return;
 
-    this.card.x = cardX;
-    this.card.y = cardY;
-    this.card.scale.set(1);
+  if (this.selectedNumbers.size === 0) {
+    this.errorTxt.text = "Please select at least one number.";
+    return;
+  }
 
-    this.cardBg.clear();
-    this.cardBg.roundRect(0, 0, mW, mH, 18);
-    this.cardBg.fill({ color: 0x0a1f4a, alpha: 0.98 });
-    this.cardBg.stroke({ color: 0x6c3483, width: 2 });
+  const amt = parseFloat(this.ctx.getState().amount);
+  if (isNaN(amt) || amt <= 0) {
+    this.errorTxt.text = "Please enter a valid bet amount.";
+    return;
+  }
 
-    let y = 28;
+  this.errorTxt.text = "";
+  this.onConfirm?.();
+}
 
-    // Title
-    this.titleTxt.style.fontSize = Math.max(14, Math.round(mW * 0.044));
+  layout(panelX: number, panelY: number, panelW: number, panelH: number): void {
+    this.panelW = panelW;
+    this.panelH = panelH;
+    this.container.x = panelX;
+    this.container.y = panelY;
+
+    const PAD = Math.round(panelW * 0.055);
+    const cx = panelW / 2;
+
+    // ── Background ───────────────────────────────────────────────────────
+    this.panelBg.clear();
+    this.panelBg.roundRect(0, 0, panelW, panelH, 14);
+    this.panelBg.fill({ color: 0x071530, alpha: 0.95 });
+    this.panelBg.stroke({ color: 0x2a4a8a, width: 1.5 });
+
+    let y = PAD;
+
+    // ── Title ────────────────────────────────────────────────────────────
+    this.titleTxt.style.fontSize = Math.max(10, Math.round(panelW * 0.035));
     this.titleTxt.x = cx;
-    this.titleTxt.y = y;
-    y += 32;
+    this.titleTxt.y = y + 7;
+    y += 24;
 
-    // Subtitle
-    this.subtitleTxt.style.fontSize = Math.max(10, Math.round(mW * 0.026));
-    this.subtitleTxt.x = cx;
-    this.subtitleTxt.y = y;
-    y += 26;
+    // ── Subtitle hint ────────────────────────────────────────────────────
+    const subtitleTxt = new Text({
+      text: "Tap numbers to select (multi-select allowed)",
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: Math.max(8, Math.round(panelW * 0.022)),
+        fill: 0x4a6a9a,
+        align: "center",
+      }),
+    });
+    subtitleTxt.anchor.set(0.5, 0);
+    subtitleTxt.x = cx;
+    subtitleTxt.y = y;
+    this.container.addChild(subtitleTxt);
+    y += subtitleTxt.height + 4;
 
-    // Number grid
+    // ── Divider ──────────────────────────────────────────────────────────
+    const div = new Graphics();
+    div.moveTo(PAD, y);
+    div.lineTo(panelW - PAD, y);
+    div.stroke({ color: 0x2a4a8a, width: 1 });
+    this.container.addChildAt(div, 1);
+    y += 10;
+
+    // ── Number grid ──────────────────────────────────────────────────────
     this.gridContainer.removeChildren();
     this.cells.clear();
 
-    const numbers  = this.wheelNumbers.length > 0 ? this.wheelNumbers : [];
-    const COLS     = 7;
-    const availW   = mW - PAD * 2;
-    const cellGap  = Math.round(availW * 0.025);
+    const numbers = this.segments;
+    const COLS = Math.min(numbers.length, numbers.length <= 20 ? 7 : 9);
+    const availW = panelW - PAD * 2;
+    const cellGap = Math.round(availW * 0.022);
     const cellSize = Math.round((availW - cellGap * (COLS - 1)) / COLS);
-    const ROWS     = Math.ceil(numbers.length / COLS);
+    const ROWS = Math.ceil(numbers.length / COLS);
 
     this.gridContainer.x = PAD;
     this.gridContainer.y = y;
@@ -233,16 +482,16 @@ export class PredictionModal {
       root.cursor = "pointer";
 
       const bg = new Graphics();
-      bg.roundRect(0, 0, cellSize, cellSize, 5);
-      bg.fill({ color: numFill(num) });
-      bg.stroke({ color: numStroke(num), width: 1.5 });
+      bg.roundRect(0, 0, cellSize, cellSize, 4);
+      bg.fill({ color: num.color });
+      bg.stroke({ color: num.color, width: 1 });
       root.addChild(bg);
 
       const lbl = new Text({
-        text: `${num}`,
+        text: `${num.value}`,
         style: new TextStyle({
-          fontFamily: "Arial",
-          fontSize: Math.max(9, Math.round(cellSize * 0.38)),
+          fontFamily: "Century Gothic",
+          fontSize: Math.max(8, Math.round(cellSize * 0.4)),
           fill: 0xffffff,
           fontWeight: "bold",
         }),
@@ -252,92 +501,172 @@ export class PredictionModal {
       lbl.y = cellSize / 2;
       root.addChild(lbl);
 
-      root.on("pointerdown", () => this.ctx.select(num));
-      root.on("pointerover", () => { bg.alpha = 0.7; });
-      root.on("pointerout",  () => { bg.alpha = 1; });
+      // ── Multi-select toggle ──────────────────────────────────────────
+      root.on("pointerdown", () => this._toggleNumber(Number(num.value)));
+      root.on("pointerover", () => {
+        bg.alpha = 0.7;
+      });
+      root.on("pointerout", () => {
+        bg.alpha = 1;
+      });
 
       this.gridContainer.addChild(root);
       this.cells.set(num, { bg, root, cellSize });
 
       if (this.focusManager) {
-        this.focusManager.addItem(root, () => this.ctx.select(num), { group: "modal", label: `Pick ${num}` });
+        this.focusManager.addItem(
+          root,
+          () => this._toggleNumber(Number(num.value)),
+          {
+            group: "default",
+            label: `Toggle ${num.value}`,
+          },
+        );
       }
     });
 
-    y += ROWS * (cellSize + cellGap) + PAD;
+    y += ROWS * (cellSize + cellGap) + PAD * 0.7;
 
-    // Selection bar
-    const selH = Math.round(mH * 0.065);
+    // ── Selection bar ────────────────────────────────────────────────────
+    const selH = Math.round(panelH * 0.07);
     this.selectionBar.x = PAD;
     this.selectionBar.y = y;
     this.selectionBg.clear();
-    this.selectionBg.roundRect(0, 0, mW - PAD * 2, selH, 8);
+    this.selectionBg.roundRect(0, 0, panelW - PAD * 2, selH, 6);
     this.selectionBg.fill({ color: 0x112244 });
     this.selectionBg.stroke({ color: 0x334477, width: 1 });
-    this.selectionTxt.style.fontSize = Math.max(11, Math.round(mW * 0.028));
-    this.selectionTxt.x = (mW - PAD * 2) / 2;
+    this.selectionTxt.style.fontSize = Math.max(12, Math.round(panelW * 0.032));
+    this.selectionTxt.x = (panelW - PAD * 2) / 2;
     this.selectionTxt.y = selH / 2;
-    y += selH + PAD;
+    y += selH + PAD * 0.6;
 
-    // ── HTML amount input — larger height for TV ──────────────────────────
-    const inputH = Math.round(mH * 0.115);   // was 0.075 — ~53% taller
-    this.inputX = cardX + PAD;
-    this.inputY = cardY + y;
-    this.inputW = mW - PAD * 2;
-    this.inputH = inputH;
+    // ── HTML amount input ────────────────────────────────────────────────
+    const inputH = Math.min(44, Math.max(36, Math.round(panelH * 0.095)));
+    const stepGap = Math.max(10, Math.round(PAD * 0.5));
+    const stepW = Math.max(40, Math.round(panelW * 0.1));
+    const leftStepX = PAD;
+    const rightStepX = panelW - PAD - stepW;
+    const inputStartX = leftStepX + stepW + stepGap;
+    this.inputLogicalW = Math.max(120, rightStepX - stepGap - inputStartX);
+    this.inputLogicalH = inputH;
+    this._storedLocalInputX = inputStartX;
+    this._storedLocalInputY = y;
+    this._syncInputPosition(
+      panelX + inputStartX,
+      panelY + y,
+      this.inputLogicalW,
+      this.inputLogicalH,
+    );
     this._createOrUpdateInput();
-    y += inputH + Math.round(PAD * 0.6);
+    this.amountFocusProxy.x = inputStartX;
+    this.amountFocusProxy.y = y;
+    this.amountFocusBg.clear();
+    this.amountFocusBg.roundRect(0, 0, this.inputLogicalW, inputH, 8);
+    this.amountFocusBg.fill({ color: 0xffffff, alpha: 0.001 });
 
-    // Error text
-    this.errorTxt.style.fontSize = Math.max(10, Math.round(mW * 0.024));
+    this.amountStepButtons.forEach((chip, i) => {
+      const isMinus = i === 0;
+      chip.root.x = isMinus ? leftStepX : rightStepX;
+      chip.root.y = y;
+      chip.root.zIndex = 15;
+      chip.bg.clear();
+      chip.bg.roundRect(0, 0, stepW, inputH, 8);
+      chip.bg.fill({ color: 0x030712, alpha: 0.95 });
+      chip.bg.stroke({ color: 0xeab308, width: 1.5, alpha: 0.95 });
+      chip.txt.style.fontSize = Math.max(16, Math.round(inputH * 0.52));
+      chip.txt.x = stepW / 2;
+      chip.txt.y = inputH / 2;
+    });
+
+    y += inputH + PAD * 0.35;
+
+    const chipGap = Math.max(8, Math.round(PAD * 0.45));
+    const chipH = Math.min(34, Math.max(28, Math.round(panelH * 0.075)));
+    const chipW = Math.floor((panelW - PAD * 2 - chipGap * 3) / 4);
+    const confirmBtnH = Math.min(42, Math.max(34, Math.round(panelH * 0.085)));
+    const chipsY = y;
+    this.chipButtons.forEach((chip, i) => {
+      chip.root.visible = true;
+      chip.root.eventMode =
+        this.enabled_ && !this.submitting_ ? "static" : "none";
+      chip.root.x = PAD + i * (chipW + chipGap);
+      chip.root.y = chipsY;
+      chip.root.zIndex = 15;
+      chip.bg.clear();
+      chip.bg.roundRect(0, 0, chipW, chipH, 6);
+      chip.bg.fill({ color: 0x030712, alpha: 0.95 });
+      chip.bg.stroke({ color: 0xeab308, width: 1.5, alpha: 0.95 });
+      chip.txt.style.fontSize = Math.max(11, Math.round(chipH * 0.42));
+      chip.txt.x = chipW / 2;
+      chip.txt.y = chipH / 2;
+    });
+    y = chipsY + chipH + PAD * 0.5;
+
+    // ── Error text ───────────────────────────────────────────────────────
+    this.errorTxt.style.fontSize = Math.max(9, Math.round(panelW * 0.024));
     this.errorTxt.x = cx;
     this.errorTxt.y = y;
-    y += 22;
+    y += 18;
 
-    // Confirm button (PixiJS visual)
-    const btnH     = Math.round(mH * 0.09);
-    const confirmW = mW - PAD * 2;
+    // ── Confirm button ───────────────────────────────────────────────────
+    const btnH = confirmBtnH;
+    const confirmW = panelW - PAD * 2;
+    const minConfirmY = y;
+    const confirmBottomInset = PAD + Math.max(8, Math.round(PAD * 0.35));
+    const bottomAnchoredY = panelH - confirmBottomInset - btnH;
 
     this.confirmBtn.x = PAD;
-    this.confirmBtn.y = y;
+    this.confirmBtn.y = Math.max(minConfirmY, bottomAnchoredY);
     this.confirmBg.clear();
     this.confirmBg.roundRect(0, 0, confirmW, btnH, btnH / 2);
     this.confirmBg.fill({ color: 0xf59e0b });
-    this.confirmTxt.style.fontSize = Math.max(12, Math.round(btnH * 0.44));
+    this.confirmTxt.style.fontSize = Math.max(11, Math.round(btnH * 0.44));
     this.confirmTxt.x = confirmW / 2;
     this.confirmTxt.y = btnH / 2;
 
-    // Store confirm button DOM overlay coords
-    this.confirmDomX = cardX + PAD;
-    this.confirmDomY = cardY + y;
-    this.confirmDomW = confirmW;
-    this.confirmDomH = btnH;
-    this._createOrUpdateConfirmDomBtn();
+    // Re-apply current multi-select highlights
+    this._refreshCellHighlights();
+    this._refreshSelectionBar();
   }
 
-  // ── HTML input helpers ───────────────────────────────────────────────────
+  repositionInput(panelX: number, panelY: number) {
+    if (!this.amountInputWrapper) return;
+    const localInputX = this._storedLocalInputX;
+    const localInputY = this._storedLocalInputY;
+    this._syncInputPosition(
+      panelX + localInputX,
+      panelY + localInputY,
+      this.inputLogicalW,
+      this.inputLogicalH,
+    );
+    this._repositionInput();
+  }
+
+  private _storedLocalInputX = 0;
+  private _storedLocalInputY = 0;
+
+  private _syncInputPosition(absX: number, absY: number, w: number, h: number) {
+    const canvas = document.querySelector("canvas");
+    const rect = canvas?.getBoundingClientRect();
+    const scaleX = rect ? rect.width / (canvas?.width || rect.width) : 1;
+    const scaleY = rect ? rect.height / (canvas?.height || rect.height) : 1;
+
+    this.inputX = (rect?.left ?? 0) + absX * scaleX;
+    this.inputY = (rect?.top ?? 0) + absY * scaleY;
+    this.inputW = w * scaleX;
+    this.inputH = h * scaleY;
+  }
 
   private _createOrUpdateInput() {
     if (!this.amountInputWrapper) {
       const wrapper = document.createElement("div");
       wrapper.style.cssText = `
         position: fixed;
-        z-index: 9999;
-        display: none;
+        z-index: 5;
+        display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 0;
         pointer-events: auto;
-      `;
-
-      const label = document.createElement("label");
-      label.textContent = "Bet Amount";
-      label.style.cssText = `
-        color: #aaccff;
-        font-family: Arial, sans-serif;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
       `;
 
       const spinnerStyle = document.createElement("style");
@@ -345,25 +674,25 @@ export class PredictionModal {
         .bet-input::-webkit-inner-spin-button,
         .bet-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .bet-input { -moz-appearance: textfield; }
-        .bet-input:focus { outline: none; border-color: #f59e0b !important; box-shadow: 0 0 0 3px rgba(245,158,11,0.35); }
+        .bet-input:focus { outline: none; border-color: #f59e0b !important; box-shadow: 0 0 0 2px rgba(245,158,11,0.3); }
       `;
       document.head.appendChild(spinnerStyle);
 
       const input = document.createElement("input");
-      input.type        = "number";
-      input.min         = "0";
-      input.step        = "0.01";
-      input.placeholder = "Enter amount…";
-      input.className   = "bet-input";
-      input.tabIndex    = 1;   // Tab order slot 1 — first tabbable element in modal
+      input.type = "number";
+      input.min = "0";
+      input.step = "0.01";
+      input.placeholder = "Amount per number…";
+      input.className = "bet-input";
+      input.tabIndex = 1;
       input.style.cssText = `
         background: #0d1b3e;
         color: #ffd700;
-        border: 2px solid #334477;
-        border-radius: 10px;
-        padding: 0 18px;
+        border: 1.5px solid #334477;
+        border-radius: 8px;
+        padding: 0 16px;
         font-family: Arial, monospace;
-        font-size: 22px;
+        font-size: 18px;
         font-weight: bold;
         outline: none;
         width: 100%;
@@ -372,22 +701,31 @@ export class PredictionModal {
         caret-color: #f59e0b;
       `;
 
-      input.addEventListener("input", () => { this.ctx.setAmount(input.value); });
-
-      // Block keyboard events from leaking to canvas / FocusManager,
-      // but allow Tab so the browser can move focus to the confirm button
+      input.addEventListener("input", () => {
+        this.ctx.setAmount(input.value);
+        this._refreshSelectionBar();
+      });
       input.addEventListener("keydown", (e: KeyboardEvent) => {
         if (e.key !== "Tab") e.stopPropagation();
       });
-      input.addEventListener("keyup",    (e: KeyboardEvent) => { if (e.key !== "Tab") e.stopPropagation(); });
-      input.addEventListener("keypress", (e: KeyboardEvent) => { if (e.key !== "Tab") e.stopPropagation(); });
+      input.addEventListener("keyup", (e: KeyboardEvent) => {
+        if (e.key !== "Tab") e.stopPropagation();
+      });
+      input.addEventListener("keypress", (e: KeyboardEvent) => {
+        if (e.key !== "Tab") e.stopPropagation();
+      });
 
-      wrapper.appendChild(label);
       wrapper.appendChild(input);
       document.body.appendChild(wrapper);
 
       this.amountInputWrapper = wrapper;
       this.amountInputEl = input;
+      this.amountInputEl.tabIndex = this.enabled_ ? 1 : -1;
+      this.amountInputEl.disabled = !this.enabled_;
+      this.amountInputWrapper.style.display = this.enabled_ ? "flex" : "none";
+      this.amountInputWrapper.style.pointerEvents = this.enabled_
+        ? "auto"
+        : "none";
     }
 
     this._repositionInput();
@@ -395,190 +733,101 @@ export class PredictionModal {
 
   private _repositionInput() {
     if (!this.amountInputWrapper || !this.amountInputEl) return;
-
     const wrapper = this.amountInputWrapper;
-    const input   = this.amountInputEl;
-    const labelEl = wrapper.querySelector("label") as HTMLLabelElement | null;
-
-    wrapper.style.left  = `${this.inputX}px`;
-    wrapper.style.top   = `${this.inputY}px`;
+    const input = this.amountInputEl;
+    wrapper.style.left = `${this.inputX}px`;
+    wrapper.style.top = `${this.inputY}px`;
     wrapper.style.width = `${this.inputW}px`;
-
-    const labelH = 20;
-    const inputH = this.inputH - labelH - 6;
-    if (labelEl) labelEl.style.fontSize = `${Math.max(11, Math.round(this.inputW * 0.028))}px`;
-    input.style.height   = `${inputH}px`;
-    input.style.fontSize = `${Math.max(16, Math.round(inputH * 0.42))}px`;
+    const inputH = Math.max(36, this.inputH);
+    input.style.height = `${inputH}px`;
+    input.style.fontSize = `${Math.max(13, Math.round(inputH * 0.4))}px`;
   }
 
-  // ── Transparent DOM confirm button — enables Tab focus for TV ────────────
-
-  private _createOrUpdateConfirmDomBtn() {
-    if (!this.confirmDomBtn) {
-      const btn = document.createElement("button");
-      btn.tabIndex = 2;   // Tab order slot 2 — second stop after the amount input
-      btn.setAttribute("aria-label", "Confirm Bet");
-      btn.style.cssText = `
-        position: fixed;
-        z-index: 9999;
-        display: none;
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        border-radius: 999px;
-        outline: none;
-      `;
-
-      // Highlight the PixiJS confirm button when this DOM button is focused
-      btn.addEventListener("focus", () => {
-        this.confirmBg.tint = 0xfbbf24;
-        // Draw a visible focus ring via box-shadow so TV users get feedback
-        btn.style.boxShadow = "0 0 0 4px rgba(245,158,11,0.7)";
-      });
-      btn.addEventListener("blur", () => {
-        this.confirmBg.tint = 0xffffff;
-        btn.style.boxShadow = "none";
-      });
-
-      // Pointer events mirror the PixiJS button's hover tint
-      btn.addEventListener("pointerover", () => { this.confirmBg.tint = 0xfbbf24; });
-      btn.addEventListener("pointerout",  () => { this.confirmBg.tint = 0xffffff; });
-
-      // Trigger confirm on click or Enter/Space (TV remote select key)
-      btn.addEventListener("click", () => this._handleConfirm());
-      btn.addEventListener("keydown", (e: KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          this._handleConfirm();
-        }
-        // Allow Tab to propagate so focus can cycle naturally
-      });
-
-      document.body.appendChild(btn);
-      this.confirmDomBtn = btn;
-    }
-
-    this._repositionConfirmDomBtn();
+  private _refreshConfirmButton() {
+    const isBusy = this.submitting_;
+    this.confirmTxt.text = isBusy ? "Confirming..." : "✓  Confirm Bet";
+    this.confirmBg.alpha = isBusy ? 0.75 : 1;
   }
 
-  private _repositionConfirmDomBtn() {
-    if (!this.confirmDomBtn) return;
-    const btn = this.confirmDomBtn;
-    btn.style.left   = `${this.confirmDomX}px`;
-    btn.style.top    = `${this.confirmDomY}px`;
-    btn.style.width  = `${this.confirmDomW}px`;
-    btn.style.height = `${this.confirmDomH}px`;
+  private _incrementAmount(delta: number) {
+    if (!this.enabled_ || this.submitting_) return;
+    const current = Number(this.ctx.getState().amount);
+    const safeCurrent = Number.isFinite(current) ? current : 0;
+    const next = Math.max(0, safeCurrent + delta);
+
+    if (this.amountInputEl) this.amountInputEl.value = String(next);
+    this.ctx.setAmount(String(next));
+    this._refreshSelectionBar();
   }
 
   clearBetInput() {
     if (this.amountInputEl) this.amountInputEl.value = "";
     this.ctx.setAmount("");
     this.ctx.clear();
+    // Also clear multi-selection
+    this.selectedNumbers.clear();
+    this._refreshCellHighlights();
+    this._refreshSelectionBar();
   }
 
-  // ── _updateState — ONLY redraws selection highlights ────────────────────
-  private _updateState(state: PredictionState): void {
-    this.cells.forEach(({ bg, root, cellSize }, num) => {
-      const sel = state.selected === num;
-      bg.clear();
-      bg.roundRect(0, 0, cellSize, cellSize, 5);
-      bg.fill({ color: numFill(num) });
-      bg.stroke({ color: sel ? 0xffd700 : numStroke(num), width: sel ? 3 : 1.5 });
-      root.zIndex = sel ? 10 : 0;
-    });
+  setAmount(value: string) {
+    if (this.amountInputEl) this.amountInputEl.value = value;
+    this.ctx.setAmount(value);
+  }
 
-    const mW  = this.modalW;
-    const mH  = this.modalH;
-    const PAD = Math.round(mW * 0.05);
-    const selW = mW - PAD * 2;
-    const selH = Math.round(mH * 0.065);
-
-    if (state.selected !== null) {
-      this.selectionTxt.text = `Selected: ${state.selected}`;
-      this.selectionTxt.style.fill = 0xffd700;
-      this.selectionBg.clear();
-      this.selectionBg.roundRect(0, 0, selW, selH, 8);
-      this.selectionBg.fill({ color: 0x1a3a0a });
-      this.selectionBg.stroke({ color: 0x7cfc00, width: 1.5 });
-    } else {
-      this.selectionTxt.text = "No number selected — tap a number above";
-      this.selectionTxt.style.fill = 0x666688;
-      this.selectionBg.clear();
-      this.selectionBg.roundRect(0, 0, selW, selH, 8);
-      this.selectionBg.fill({ color: 0x112244 });
-      this.selectionBg.stroke({ color: 0x334477, width: 1 });
+  setAmountOverlayVisible(visible: boolean) {
+    this.amountOverlayVisible_ = visible;
+    if (this.amountInputWrapper) {
+      this.amountInputWrapper.style.display =
+        this.enabled_ && this.amountOverlayVisible_ ? "flex" : "none";
+      this.amountInputWrapper.style.pointerEvents =
+        this.enabled_ && this.amountOverlayVisible_ && !this.submitting_
+          ? "auto"
+          : "none";
     }
+  }
+
+  focusAmountInput() {
+    this.amountInputEl?.focus();
+  }
+
+  private _updateState(state: PredictionState): void {
+    if (this.amountInputEl && this.amountInputEl.value !== state.amount) {
+      this.amountInputEl.value = state.amount;
+    }
+    // ✅ Refresh bar so total bet updates in real-time as amount changes
+    this._refreshSelectionBar();
   }
 
   show(): void {
-    if (this.amountInputEl) {
-      this.amountInputEl.value = this.ctx.getState().amount ?? "";
-    }
-    if (this.amountInputWrapper) this.amountInputWrapper.style.display = "flex";
-    if (this.confirmDomBtn)      this.confirmDomBtn.style.display      = "block";
-
-    if (this.animFrame !== null) { cancelAnimationFrame(this.animFrame); this.animFrame = null; }
-
     this.container.visible = true;
-    this.container.alpha = 0;
-    this.card.scale.set(1);
-    if (this.focusManager) this.focusManager.setActiveGroup("modal");
-
-    const start = performance.now();
-    const animIn = (now: number) => {
-      const t    = Math.min(1, (now - start) / 220);
-      const ease = 1 - Math.pow(1 - t, 3);
-      this.container.alpha = ease;
-      if (t < 1) {
-        this.animFrame = requestAnimationFrame(animIn);
-      } else {
-        this.animFrame = null;
-        this.visible_ = true;
-        this.amountInputEl?.focus();
-      }
-    };
-    this.animFrame = requestAnimationFrame(animIn);
+    if (this.amountInputWrapper) {
+      this.amountInputWrapper.style.display =
+        this.enabled_ && this.amountOverlayVisible_ ? "flex" : "none";
+      this.amountInputWrapper.style.pointerEvents =
+        this.enabled_ && this.amountOverlayVisible_ ? "auto" : "none";
+    }
+    if (this.focusManager) this.focusManager.setActiveGroup("default");
   }
 
   hide(): void {
-    if (this.amountInputWrapper) this.amountInputWrapper.style.display = "none";
-    if (this.confirmDomBtn)      this.confirmDomBtn.style.display      = "none";
-    this.amountInputEl?.blur();
-
-    if (!this.container.visible) return;
-    if (this.animFrame !== null) { cancelAnimationFrame(this.animFrame); this.animFrame = null; }
-    if (this.focusManager) this.focusManager.setActiveGroup("default");
-
-    this.visible_ = false;
-
-    const start = performance.now();
-    const animOut = (now: number) => {
-      const t = Math.min(1, (now - start) / 180);
-      this.container.alpha = 1 - t;
-      if (t < 1) {
-        this.animFrame = requestAnimationFrame(animOut);
-      } else {
-        this.animFrame = null;
-        this.container.visible = false;
-        this.container.alpha = 1;
-      }
-    };
-    this.animFrame = requestAnimationFrame(animOut);
+    this.setEnabled(false);
   }
 
-  isVisible(): boolean { return this.visible_; }
+  enable(): void {
+    this.setEnabled(true);
+  }
+
+  isVisible(): boolean {
+    return this.container.visible;
+  }
 
   destroy(): void {
     this.unsubscribe?.();
-    if (this.animFrame !== null) cancelAnimationFrame(this.animFrame);
     if (this.amountInputWrapper) {
       document.body.removeChild(this.amountInputWrapper);
       this.amountInputWrapper = null;
       this.amountInputEl = null;
-    }
-    if (this.confirmDomBtn) {
-      document.body.removeChild(this.confirmDomBtn);
-      this.confirmDomBtn = null;
     }
     this.container.destroy({ children: true });
   }
