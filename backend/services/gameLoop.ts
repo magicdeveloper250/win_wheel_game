@@ -50,7 +50,9 @@ export const startGameLoop = async () => {
       if (!isLoopRunning) break;
       const betSession = await startBetSession({ sessionId: session.id });
 
-      console.log(`[GameLoop] Session #${betSession.session.sessionNumber} opened.`);
+      console.log(
+        `[GameLoop] Session #${betSession.session.sessionNumber} opened.`,
+      );
 
       await emitGameEvent(GameEventType.SESSION_OPENED, {
         sessionId: betSession.id,
@@ -77,7 +79,7 @@ export const startGameLoop = async () => {
       await delay(LOCK_BUFFER_MS);
       if (!isLoopRunning) break;
 
-      const result = await spin({ winNumber: undefined });
+      const result = await spin( );
       if (!isLoopRunning) break;
 
       console.log(
@@ -88,6 +90,7 @@ export const startGameLoop = async () => {
         sessionId: betSession.id,
         sessionNumber: betSession.session.sessionNumber,
         winNumber: result.winNumber,
+        winMultiplier: result.winMultiplier,
         animation: result.animation ?? {
           duration: ANIMATION_DURATION_MS / 1000,
         },
@@ -98,7 +101,10 @@ export const startGameLoop = async () => {
 
       await delay(ANIMATION_DURATION_MS);
       if (!isLoopRunning) break;
-      await endBetSession({ sessionId: betSession.id,  resultId:result.result.id });
+      await endBetSession({
+        sessionId: betSession.id,
+        resultId: result.result.id,
+      });
       await emitGameEvent(GameEventType.ROUND_ENDED, {
         completedSession: result.completedSession,
         winNumber: result.winNumber,

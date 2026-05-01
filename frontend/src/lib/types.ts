@@ -268,6 +268,7 @@ export interface WsSpinResult {
   sessionId: string;
   sessionNumber: number;
   winNumber: number;
+   winMultiplier: string;
   animation: { duration: number };
   completedSession: GameSession;
   nextSession: GameSession | null;

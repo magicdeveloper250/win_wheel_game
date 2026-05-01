@@ -25,7 +25,6 @@ import {
   INNER_RADIUS,
   MIDDLE_RADIUS,
   OUTER_RADIUS,
-  segmentAtTop,
   type Segment,
 } from "@/lib/segments";
 import { gameHistory, type HistoryEntry } from "@/contexts/GameHistoryContext";
@@ -271,6 +270,17 @@ const GamePage: React.FC = () => {
     } catch (error) {}
   };
 
+   const stopKeyIfInputFocused = (e: KeyboardEvent) => {
+          const a = document.activeElement;
+          if (
+            a instanceof HTMLInputElement ||
+            a instanceof HTMLTextAreaElement ||
+            a instanceof HTMLSelectElement ||
+            a?.closest("[role='dialog']")
+          )
+            e.stopImmediatePropagation();
+        };
+
   const fetchLatestBets = async () => {
     try {
       const resp = await axios.get("/bets/latest");
@@ -282,7 +292,8 @@ const GamePage: React.FC = () => {
               ?.label ?? "",
           number: b.winNumber,
           segmentColor:
-            outerSegments.find((s) => Number(s.value) == b.winNumber)?.color ?? 0x1a1a1a,
+            outerSegments.find((s) => Number(s.value) == b.winNumber)?.color ??
+            0x1a1a1a,
           timestamp: new Date(b.createdAt).getTime(),
           isZero: b.winNumber === 0,
           points: b.winNumber,
@@ -294,198 +305,180 @@ const GamePage: React.FC = () => {
   };
 
   // ── Spin wheel ─────────────────────────────────────────────────────────────
-  const spinWheelRef = useRef<(targetWinNumber?: number) => void>(() => {});
+  const spinWheelRef = useRef<
+    (targetWinNumber: number, targetMultiplierLetter: string) => void
+  >(() => {});
 
-  const spinWheel = useCallback((targetWinNumber?: number) => {
-    if (spinningRef.current || !outerRingRef.current || !midRingRef.current)
-      return;
-    spinningRef.current = true;
-    gameStatus.onSpinStart();
-    audioManager.playSpinStart();
-    if (resultOverlayRef.current) resultOverlayRef.current.hide();
-    if (resultOverlayHideTimerRef.current !== null) {
-      window.clearTimeout(resultOverlayHideTimerRef.current);
-      resultOverlayHideTimerRef.current = null;
-    }
+  const spinWheel = useCallback(
+    (targetWinNumber: number, targetMultiplierLetter: string) => {
+      if (spinningRef.current || !outerRingRef.current || !midRingRef.current)
+        return;
+      spinningRef.current = true;
+      gameStatus.onSpinStart();
+      audioManager.playSpinStart();
+      if (resultOverlayRef.current) resultOverlayRef.current.hide();
+      if (resultOverlayHideTimerRef.current !== null) {
+        window.clearTimeout(resultOverlayHideTimerRef.current);
+        resultOverlayHideTimerRef.current = null;
+      }
 
-    // Disable panel during spin
-    predictionPanelRef.current?.hide();
+      predictionPanelRef.current?.hide();
 
-    const session = activeSessionRef.current;
-    const duration = (session?.duration ?? 5) * 1000;
+      const session = activeSessionRef.current;
+      const duration = (session?.duration ?? 5) * 1000;
+      const PI2 = Math.PI * 2;
 
-    let outerDelta: number;
-    const effectiveTarget =
-      session?.shouldWin && targetWinNumber !== undefined
-        ? targetWinNumber
-        : targetWinNumber;
+      // ── Outer ring ────────────────────────────────────────────────────────
+      let outerDelta: number;
 
-    // In spinWheel, replace the outerDelta calculation block:
-
-    if (effectiveTarget !== undefined && outerSegmentsRef.current.length > 0) {
       const targetIdx = outerSegmentsRef.current.findIndex(
-        (s) => Number(s.value) === effectiveTarget,
+        (s) => Number(s.value) === targetWinNumber,
       );
 
       if (targetIdx >= 0) {
-        const segAngle = (Math.PI * 2) / outerSegmentsRef.current.length;
-
+        const segAngle = PI2 / outerSegmentsRef.current.length;
         const targetAngle = -(targetIdx * segAngle + segAngle / 2);
 
-        const currentRot = outerRingRef.current.rotation;
-        const currentNorm = currentRot % (Math.PI * 2);
+        const currentNorm = ((outerRingRef.current.rotation % PI2) + PI2) % PI2;
+        const targetNorm = ((targetAngle % PI2) + PI2) % PI2;
 
-        let diff = (targetAngle - currentNorm + Math.PI * 4) % (Math.PI * 2);
-
-        if (diff < 0.01) diff += Math.PI * 2;
+        let diff = targetNorm - currentNorm;
+        if (diff <= 0) diff += PI2;
 
         const spins = 8 + Math.floor(Math.random() * 5);
-        outerDelta = spins * Math.PI * 2 + diff;
+        outerDelta = spins * PI2 + diff;
       } else {
-        outerDelta = (10 + Math.random() * 5) * Math.PI * 2;
+        outerDelta = (10 + Math.random() * 5) * PI2;
       }
-    } else {
-      outerDelta = (10 + Math.random() * 5) * Math.PI * 2;
-    }
 
-    let midDelta: number;
-    const maxMult =
-      session?.shouldWin && session?.multiplier?.winMultiplier != null
-        ? Number(session.multiplier.winMultiplier)
-        : null;
+      // ── Mid ring ──────────────────────────────────────────────────────────
+      let midDelta: number;
 
-    if (maxMult !== null && middleSegmentsRef.current.length > 0) {
-      const eligible = middleSegmentsRef.current
-        .map((s, i) => ({ i, v: Number(s.value) }))
-        .filter((x) => x.v <= maxMult);
-      const pool =
-        eligible.length > 0
-          ? eligible
-          : middleSegmentsRef.current.map((s, i) => ({
-              i,
-              v: Number(s.value),
-            }));
-      const best = pool.reduce((a, b) => (b.v > a.v ? b : a));
-      const targetMidIdx = best.i;
-      const midSegAngle = (Math.PI * 2) / middleSegmentsRef.current.length;
-      // Match segmentAtTop(): target the CENTER of the multiplier segment
-      const targetMidAngle = -(targetMidIdx * midSegAngle + midSegAngle / 2);
-      const currentMidRot = midRingRef.current.rotation % (Math.PI * 2);
-      const midSpins = 7 + Math.floor(Math.random() * 8);
-      midDelta = -(
-        midSpins * Math.PI * 2 +
-        ((-targetMidAngle + currentMidRot + Math.PI * 4) % (Math.PI * 2))
+      const targetMidIdx = middleSegmentsRef.current.findIndex(
+        (s) => s.label === targetMultiplierLetter.toUpperCase(),
       );
-    } else {
-      midDelta = -(
-        (7 + Math.random() * 8) * Math.PI * 2 +
-        Math.random() * Math.PI * 2
-      );
-    }
 
-    const outerStart = outerRingRef.current.rotation;
-    const midStart = midRingRef.current.rotation;
-    const t0 = performance.now();
-    let outerDone = false,
-      midDone = false,
-      tickStarted = false;
+      if (targetMidIdx >= 0) {
+        const midSegAngle = PI2 / middleSegmentsRef.current.length;
+        const targetRot = -(targetMidIdx * midSegAngle + midSegAngle / 2);
 
-    const animate = (now: number) => {
-      const elapsed = now - t0;
+        const currentNorm = ((midRingRef.current.rotation % PI2) + PI2) % PI2;
+        const targetNorm = ((targetRot % PI2) + PI2) % PI2;
 
-      if (!outerDone && outerRingRef.current) {
-        const p = Math.min(1, elapsed / duration);
-        outerRingRef.current.rotation = outerStart + outerDelta * easeOut(p, 4);
-        if (p >= 1) outerDone = true;
-        if (p > 0.15 && !tickStarted) {
-          tickStarted = true;
-          audioManager.startTick(60);
-        }
-        if (p > 0.75) audioManager.stopTick();
-        if (p > 0.2 && magnifierRef.current) {
-          magnifierRef.current.updateAtPointer(OUTER_RADIUS, MIDDLE_RADIUS);
-          magnifierRef.current.show();
-        }
-      }
+        let diff = targetNorm - currentNorm;
+        if (diff <= 0) diff += PI2;
 
-      if (!midDone && midRingRef.current) {
-        const p = Math.min(1, elapsed / (duration + 2000));
-        const rot = midStart + midDelta * easeOut(p, 3);
-        midRingRef.current.rotation = rot;
-        if (midLabelsRef.current) midLabelsRef.current.rotation = rot;
-        if (p >= 1) midDone = true;
-      }
-
-      focusManagerRef.current?.tick();
-
-      if (!outerDone || !midDone) {
-        animRef.current = requestAnimationFrame(animate);
+        const midSpins = 7 + Math.floor(Math.random() * 8);
+        midDelta = midSpins * PI2 + diff;
       } else {
-        audioManager.stopTick();
-        audioManager.slowTick(600);
-        magnifierRef.current?.hide();
+        midDelta = (7 + Math.random() * 8) * PI2;
+      }
 
-        const oi = segmentAtTop(
-          outerRingRef.current!.rotation,
-          outerSegmentsRef.current.length,
-        );
-        const mi = segmentAtTop(
-          midRingRef.current!.rotation,
-          middleSegmentsRef.current.length,
-        );
-        const outerSeg = outerSegmentsRef.current[oi];
-        const midSeg = middleSegmentsRef.current[mi];
-        if (!outerSeg || !midSeg) {
-          spinningRef.current = false;
-          return;
-        }
+      // ── Animation ─────────────────────────────────────────────────────────
+      const outerStart = outerRingRef.current.rotation;
+      const midStart = midRingRef.current.rotation;
+      const t0 = performance.now();
+      let outerDone = false,
+        midDone = false,
+        tickStarted = false;
 
-        const basePoints =
-          typeof outerSeg.value === "number" ? outerSeg.value : 0;
+      const animate = (now: number) => {
+        const elapsed = now - t0;
 
-        if (innerLetterRef.current) innerLetterRef.current.text = midSeg.label;
-
-        setTimeout(() => {
-          audioManager.playWin(basePoints);
-          
-          gameStatus.onSpinComplete(midSeg.label, basePoints, basePoints);
-
-          if (resultOverlayRef.current && layoutRef.current) {
-            const wheelCenterX =
-              wheelContainerRef.current?.getGlobalPosition().x ??
-              layoutRef.current.btnCenterX;
-            resultOverlayRef.current.show(
-              midSeg.label,
-              basePoints,
-              basePoints,
-              undefined,
-              undefined,
-              undefined,
-            );
-            resultOverlayRef.current.setPosition(
-              wheelCenterX,
-              layoutRef.current.btnAreaY - 20,
-            );
-            focusManagerRef.current?.setActiveGroup("overlay");
-            if (resultOverlayHideTimerRef.current !== null) {
-              window.clearTimeout(resultOverlayHideTimerRef.current);
-            }
-            resultOverlayHideTimerRef.current = window.setTimeout(() => {
-              resultOverlayRef.current?.hide();
-              focusManagerRef.current?.setActiveGroup("default");
-              resultOverlayHideTimerRef.current = null;
-            }, 5000);
+        if (!outerDone && outerRingRef.current) {
+          const p = Math.min(1, elapsed / duration);
+          outerRingRef.current.rotation =
+            outerStart + outerDelta * easeOut(p, 4);
+          if (p >= 1) outerDone = true;
+          if (p > 0.15 && !tickStarted) {
+            tickStarted = true;
+            audioManager.startTick(60);
           }
-        }, 700);
+          if (p > 0.75) audioManager.stopTick();
+          if (p > 0.2 && magnifierRef.current) {
+            magnifierRef.current.updateAtPointer(OUTER_RADIUS, MIDDLE_RADIUS);
+            magnifierRef.current.show();
+          }
+        }
 
-        spinningRef.current = false;
-        animRef.current = null;
-      }
-    };
+        if (!midDone && midRingRef.current) {
+          const p = Math.min(1, elapsed / (duration + 2000));
+          const rot = midStart + midDelta * easeOut(p, 3);
+          midRingRef.current.rotation = rot;
+          if (midLabelsRef.current) midLabelsRef.current.rotation = rot;
+          if (p >= 1) midDone = true;
+        }
 
-    if (animRef.current) cancelAnimationFrame(animRef.current);
-    animRef.current = requestAnimationFrame(animate);
-  }, []);
+        focusManagerRef.current?.tick();
+
+        if (!outerDone || !midDone) {
+          animRef.current = requestAnimationFrame(animate);
+        } else {
+          audioManager.stopTick();
+          audioManager.slowTick(600);
+          magnifierRef.current?.hide();
+
+          // Use server-provided values directly instead of re-reading from wheel position
+          const outerSeg = outerSegmentsRef.current.find(
+            (s) => Number(s.value) === targetWinNumber,
+          );
+          const midSeg = middleSegmentsRef.current.find(
+            (s) => s.label === targetMultiplierLetter.toUpperCase(),
+          );
+
+          if (!outerSeg || !midSeg) {
+            spinningRef.current = false;
+            return;
+          }
+
+          const basePoints =
+            typeof outerSeg.value === "number" ? outerSeg.value : 0;
+
+          if (innerLetterRef.current)
+            innerLetterRef.current.text = midSeg.label;
+
+          setTimeout(() => {
+            audioManager.playWin(basePoints);
+            gameStatus.onSpinComplete(midSeg.label, basePoints, basePoints);
+
+            if (resultOverlayRef.current && layoutRef.current) {
+              const wheelCenterX =
+                wheelContainerRef.current?.getGlobalPosition().x ??
+                layoutRef.current.btnCenterX;
+              resultOverlayRef.current.show(
+                midSeg.label,
+                basePoints,
+                basePoints,
+                undefined,
+                undefined,
+                undefined,
+              );
+              resultOverlayRef.current.setPosition(
+                wheelCenterX,
+                layoutRef.current.btnAreaY - 20,
+              );
+              focusManagerRef.current?.setActiveGroup("overlay", true);
+              if (resultOverlayHideTimerRef.current !== null) {
+                window.clearTimeout(resultOverlayHideTimerRef.current);
+              }
+              resultOverlayHideTimerRef.current = window.setTimeout(() => {
+                resultOverlayRef.current?.hide();
+                focusManagerRef.current?.setActiveGroup("default", true);
+                resultOverlayHideTimerRef.current = null;
+              }, 5000);
+            }
+          }, 700);
+
+          spinningRef.current = false;
+          animRef.current = null;
+        }
+      };
+
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      animRef.current = requestAnimationFrame(animate);
+    },
+    [],
+  );
 
   useEffect(() => {
     spinWheelRef.current = spinWheel;
@@ -535,7 +528,10 @@ const GamePage: React.FC = () => {
       }
 
       case "spin_result": {
-        spinWheelRef.current(latestEvent.winNumber as number);
+        spinWheelRef.current(
+          latestEvent.winNumber as number,
+          latestEvent.winMultiplier as string,
+        );
         fetchBalance();
         fetchLatestBets();
         break;
@@ -611,13 +607,12 @@ const GamePage: React.FC = () => {
     predictionPanelRef.current?.setEnabled(!alreadyBetted);
   }, [alreadyBetted, sceneBuilt]);
   useEffect(() => {
-    gameHistory.addEntries(latestBets)
-  },[latestBets, sceneBuilt])
+    gameHistory.addEntries(latestBets);
+  }, [latestBets, sceneBuilt]);
 
   useEffect(() => {
     fetchLatestBets();
   }, [outerSegments, middleSegments]);
-  
 
   // ── Build scene ────────────────────────────────────────────────────────────
   const buildScene = useCallback(
@@ -704,8 +699,6 @@ const GamePage: React.FC = () => {
           Math.min(centeredHistoryY, maxHistoryY),
         );
         app.stage.addChild(historyWidgetRef.current.container);
- 
-        
       }
 
       // ── Wheel ─────────────────────────────────────────────────────────────
@@ -1134,10 +1127,6 @@ const GamePage: React.FC = () => {
         predictionPanelRef.current.container.y = Math.round(
           pRect.y + panelMargin,
         );
-        predictionPanelRef.current.repositionInput(
-          predictionPanelRef.current.container.x,
-          predictionPanelRef.current.container.y,
-        );
       }
 
       // Group history + wheel + betting panel so they can be centered together
@@ -1188,11 +1177,6 @@ const GamePage: React.FC = () => {
         arenaContainer.addChild(wheelContainer);
         arenaContainer.addChild(panelContainer);
         app.stage.addChild(arenaContainer);
-
-        predictionPanelRef.current.repositionInput(
-          arenaContainer.x + panelContainer.x,
-          arenaContainer.y + panelContainer.y,
-        );
 
         const wheelGlobalX = arenaContainer.x + wheelContainer.x;
         const wheelGlobalY = arenaContainer.y + wheelContainer.y;
@@ -1290,9 +1274,15 @@ const GamePage: React.FC = () => {
         while (mountRef.current.firstChild)
           mountRef.current.removeChild(mountRef.current.firstChild);
         mountRef.current.appendChild(app.canvas);
+       
+        window.addEventListener("keydown", stopKeyIfInputFocused, true);
+        window.addEventListener("keyup", stopKeyIfInputFocused, true);
+        window.addEventListener("keypress", stopKeyIfInputFocused, true);
         app.canvas.setAttribute("tabindex", "0");
         (app.canvas as HTMLElement).style.outline = "none";
-        (app.canvas as HTMLElement).focus();
+        if (!document.querySelector("[role='dialog']")) {
+          (app.canvas as HTMLElement).focus();
+        }
         appRef.current = app;
         globalApp = app;
         setAppReady(true);
@@ -1303,13 +1293,23 @@ const GamePage: React.FC = () => {
       appRef.current.renderer.resize(window.innerWidth, window.innerHeight);
       setSceneBuilt(false);
       if (appRef.current) buildSceneRef.current(appRef.current);
-      (appRef.current.canvas as HTMLElement)?.focus();
+      const active = document.activeElement;
+      const isInputActive =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active?.closest("[role='dialog']");
+      if (!isInputActive) {
+        (appRef.current.canvas as HTMLElement)?.focus();
+      }
     };
     window.addEventListener("resize", handleResize);
 
     return () => {
       disposed = true;
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("keydown", stopKeyIfInputFocused, true);
+      window.removeEventListener("keyup", stopKeyIfInputFocused, true);
+      window.removeEventListener("keypress", stopKeyIfInputFocused, true);
       if (animRef.current) {
         cancelAnimationFrame(animRef.current);
         animRef.current = null;
@@ -1350,9 +1350,11 @@ const GamePage: React.FC = () => {
 
     setSceneBuilt(false);
     loadWheelTextures().finally(() => {
-      if (appRef.current) buildScene(appRef.current);
-      appRef.current?.canvas && (appRef.current.canvas as HTMLElement).focus();
-    });
+  if (appRef.current) buildScene(appRef.current);
+  const a = document.activeElement;
+  const safe = !(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement || a?.closest("[role='dialog']"));
+  if (safe) appRef.current?.canvas && (appRef.current.canvas as HTMLElement).focus();
+});
   }, [appReady, outerSegments, middleSegments, buildScene]);
 
   useEffect(() => {
@@ -1361,7 +1363,6 @@ const GamePage: React.FC = () => {
       fetchMiddleSegments(),
       fetchFinancialSettings(),
       fetchActiveSession(),
-     
     ]);
   }, []);
 
@@ -1369,10 +1370,6 @@ const GamePage: React.FC = () => {
     if (!sceneBuilt) return;
     applyMinBetAmount();
   }, [sceneBuilt, applyMinBetAmount]);
-
-  useEffect(() => {
-    predictionPanelRef.current?.setAmountOverlayVisible(!showOddsModal);
-  }, [showOddsModal]);
 
   return (
     <div
@@ -1407,7 +1404,10 @@ const GamePage: React.FC = () => {
           letterSpacing: "0.02em",
         }}
       >
-        <Link to={"/app"} className="flex gap-2 items-center justify-center mb-2">
+        <Link
+          to={"/app"}
+          className="flex gap-2 items-center justify-center mb-2"
+        >
           <ChevronLeft />
           <Logo />
         </Link>
@@ -1421,12 +1421,13 @@ const GamePage: React.FC = () => {
           paddingTop: "",
         }}
       >
-       
         <Button onClick={() => setDepositOpen(true)} className={cn(" py-0")}>
-          <CreditCard  /> Deposit
+          <CreditCard /> Deposit
         </Button>
-         <div className="font-bold items-end flex justify-end">
-          <span className="text-sm">{Number(userSession.session?.balance).toFixed(2)}</span>
+        <div className="font-bold items-end flex justify-end">
+          <span className="text-sm">
+            {Number(userSession.session?.balance).toFixed(2)}
+          </span>
         </div>
       </div>
 

@@ -23,9 +23,7 @@ import { randomInt } from "crypto";
  */
 const secureRandInt = (min: number, max: number): number => {
   if (min >= max)
-    throw new RangeError(
-      `secureRandInt: min (${min}) must be < max (${max})`
-    );
+    throw new RangeError(`secureRandInt: min (${min}) must be < max (${max})`);
   return randomInt(min, max); // inclusive-min, exclusive-max
 };
 
@@ -33,8 +31,7 @@ const secureRandInt = (min: number, max: number): number => {
  * Picks a cryptographically secure random element from a non-empty array.
  */
 const securePickRandom = <T>(arr: T[]): T => {
-  if (!arr.length)
-    throw new Error("securePickRandom: array must not be empty");
+  if (!arr.length) throw new Error("securePickRandom: array must not be empty");
   return arr[secureRandInt(0, arr.length)];
 };
 
@@ -190,7 +187,7 @@ export const getNextSession = async () => {
 // Spin — pure crypto-random draw, house edge via multiplier
 // ---------------------------------------------------------------------------
 
-export const spin = async (params: { winNumber?: number }) => {
+export const spin = async ( ) => {
   const activeBetSession = await prisma.betSession.findFirst({
     where: { status: GameSessionStatus.ACTIVE },
     include: {
@@ -214,6 +211,14 @@ export const spin = async (params: { winNumber?: number }) => {
     select: { targetNumber: true },
     orderBy: { targetNumber: "asc" },
   });
+  // the win multiplierrs must must not greater than session multiplier
+  const allMultipliers = await prisma.gameWinMultiplier.findMany({
+ 
+    orderBy: { winMultiplier: "asc" },
+  });
+
+  // filter multipliers <= gamewin multipler
+  const filteredMultiplier= allMultipliers.filter((m)=>m.winMultiplier<=winMultiplier)
 
   if (!allTargetNumbers.length) {
     throw { error: "No target numbers configured." };
@@ -234,8 +239,9 @@ export const spin = async (params: { winNumber?: number }) => {
   // No outcome manipulation is needed or performed.
   // -------------------------------------------------------------------------
 
-  const decidedWinNumber: number =
-    params.winNumber ?? securePickRandom(allNumbers);
+  const decidedWinNumber: number =  securePickRandom(allNumbers);
+  const decidedWinMultiplier= securePickRandom(filteredMultiplier);
+  console.log(decidedWinMultiplier)
 
   // -------------------------------------------------------------------------
   // Calculate spin animation before the transaction (non-blocking)
@@ -252,7 +258,7 @@ export const spin = async (params: { winNumber?: number }) => {
       data: {
         sessionId: activeBetSession.id,
         winNumber: decidedWinNumber,
-        winMultiplier,
+        winMultiplier: decidedWinMultiplier.winMultiplier,
       },
     });
 
@@ -331,6 +337,7 @@ export const spin = async (params: { winNumber?: number }) => {
       sessionNumber: activeGameSession.sessionNumber,
     },
     winNumber: decidedWinNumber,
+    winMultiplier:decidedWinMultiplier.multiplierLetter,
     animation,
     result,
     nextSession: nextSession
