@@ -76,7 +76,9 @@ const STATUS_LABELS: Record<GameSessionStatus, string> = {
   [GameSessionStatus.CANCELLED]: "Cancelled",
 };
 
-// ─── Skeleton rows ────────────────────────────────────────────────────────────
+
+ 
+
 function TableSkeleton() {
   return (
     <>
@@ -112,16 +114,20 @@ function CardSkeleton() {
             </div>
             <Skeleton className="h-6 w-10 rounded-full" />
           </div>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Skeleton className="h-8 w-full rounded" />
+            <Skeleton className="h-8 w-full rounded" />
+          </div>
         </div>
       ))}
     </>
   );
 }
 
-// ─── Mobile session card ──────────────────────────────────────────────────────
 function SessionCard({
   session,
   onEdit,
+  onDelete,
   isDragging,
   dragHandleProps,
 }: {
@@ -129,6 +135,7 @@ function SessionCard({
   toggling: boolean;
   onToggleForceWin: (id: string, val: boolean) => void;
   onEdit: (session: GameSession) => void;
+  onDelete: (session: GameSession) => void;
   isDragging?: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
@@ -154,14 +161,12 @@ function SessionCard({
             <span
               className={`w-2 h-2 rounded-full ${cfg.dot} ${session.status === GameSessionStatus.ACTIVE ? "animate-pulse" : ""}`}
             />
-            <span
-              className={`text-xs font-bold tracking-widest uppercase ${cfg.text}`}
-            >
+            <span className={`text-xs font-bold tracking-widest uppercase ${cfg.text}`}>
               {cfg.label}
             </span>
           </div>
         </div>
-        <span className="text-xs text-muted-foreground  ">
+        <span className="text-xs text-muted-foreground">
           {new Date(session.startedAt).toLocaleTimeString()} →{" "}
           {new Date(session.endedAt).toLocaleTimeString()}
         </span>
@@ -169,7 +174,7 @@ function SessionCard({
 
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="font-bold text-foreground tracking-wide text-sm  ">
+          <p className="font-bold text-foreground tracking-wide text-sm">
             SID-{session.id.slice(0, 8).toUpperCase()}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -178,34 +183,12 @@ function SessionCard({
               : `Started ${new Date(session.startedAt).toLocaleTimeString()}`}
           </p>
         </div>
-
-        <div className="flex items-center gap-3 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={() => onEdit(session)}
-          >
-            <Pencil size={13} />
-          </Button>
-
-          {/* <div className="flex flex-col items-center gap-1">
-            <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-              Force Win
-            </span>
-            {toggling ? (
-              <Loader2
-                size={16}
-                className="animate-spin text-muted-foreground"
-              />
-            ) : (
-              <Switch
-                checked={session.shouldWin}
-                onCheckedChange={(v) => onToggleForceWin(session.id, v)}
-                className="data-[state=checked]:bg-primary"
-              />
-            )}
-          </div> */}
+        <div
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${cfg.badge}`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+          {session.multiplier?.multiplierLetter.toUpperCase()}{" "}
+          {session.multiplier?.winMultiplier}x
         </div>
       </div>
 
@@ -217,11 +200,29 @@ function SessionCard({
           </span>
         </div>
       )}
+
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full gap-1.5"
+          onClick={() => onEdit(session)}
+        >
+          <Pencil size={12} /> Edit
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="w-full gap-1.5"
+          onClick={() => onDelete(session)}
+        >
+          <Trash2 size={12} /> Delete
+        </Button>
+      </div>
     </div>
   );
 }
 
-// ─── Filter pill ──────────────────────────────────────────────────────────────
 function FilterPill({
   label,
   active,
@@ -248,7 +249,6 @@ function FilterPill({
   );
 }
 
-// ─── Draggable table row ──────────────────────────────────────────────────────
 function DraggableTableRow({
   session,
   index,
@@ -298,7 +298,7 @@ function DraggableTableRow({
           <GripVertical size={15} />
         </div>
       </TableCell>
-      <TableCell className="  text-sm font-semibold text-foreground">
+      <TableCell className="text-sm font-semibold text-foreground">
         {session.id.toUpperCase()}
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">
@@ -316,20 +316,6 @@ function DraggableTableRow({
           {cfg.label}
         </div>
       </TableCell>
-      {/* <TableCell className="text-center">
-        {toggling ? (
-          <Loader2
-            size={15}
-            className="animate-spin text-muted-foreground mx-auto"
-          />
-        ) : (
-          <Switch
-            checked={session.shouldWin}
-            onCheckedChange={(v) => onToggleForceWin(session.id, v)}
-            className="data-[state=checked]:bg-primary"
-          />
-        )}
-      </TableCell> */}
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -354,7 +340,6 @@ function DraggableTableRow({
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
 function SessionsPage() {
   const [sessions, setSessions] = useState<GameSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -363,14 +348,10 @@ function SessionsPage() {
   const [savingOrder, setSavingOrder] = useState(false);
   const axios = useUserAxios();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<GameSessionStatus | "ALL">(
-    "ALL",
-  );
+  const [statusFilter, setStatusFilter] = useState<GameSessionStatus | "ALL">("ALL");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [sessionToDelete, setSessionToDelete] = useState<GameSession | null>(
-    null,
-  );
+  const [sessionToDelete, setSessionToDelete] = useState<GameSession | null>(null);
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
@@ -378,11 +359,8 @@ function SessionsPage() {
     totalPages: 0,
   });
 
-  // ── Create/Edit dialog state ───────────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingSession, setEditingSession] = useState<GameSession | undefined>(
-    undefined,
-  );
+  const [editingSession, setEditingSession] = useState<GameSession | undefined>(undefined);
 
   const openCreate = () => {
     setEditingSession(undefined);
@@ -394,12 +372,10 @@ function SessionsPage() {
     setDialogOpen(true);
   };
 
-  // ── Drag-and-drop state ────────────────────────────────────────────────────
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
-  // Mobile drag state
   const mobileDragIndexRef = useRef<number | null>(null);
   const [mobileDragOver, setMobileDragOver] = useState<number | null>(null);
   const [mobileDragging, setMobileDragging] = useState<number | null>(null);
@@ -408,6 +384,7 @@ function SessionsPage() {
     dragIndexRef.current = index;
     setDraggingIndex(index);
   };
+
   const openDeleteDialog = (session: GameSession) => {
     setSessionToDelete(session);
     setDeleteDialogOpen(true);
@@ -432,6 +409,7 @@ function SessionsPage() {
       setSessionToDelete(null);
     }
   };
+
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (dragIndexRef.current === null) return;
@@ -489,7 +467,6 @@ function SessionsPage() {
     }
   };
 
-  // Debounce search
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -509,7 +486,6 @@ function SessionsPage() {
     return response.data;
   };
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -535,13 +511,10 @@ function SessionsPage() {
     }
   }, [pagination.page, pagination.limit, statusFilter, debouncedSearch]);
 
-
-  
   useEffect(() => {
     load();
   }, [load]);
 
-  // ── Force Win toggle ───────────────────────────────────────────────────────
   const handleToggleForceWin = async (id: string, val: boolean) => {
     setTogglingIds((prev) => new Set(prev).add(id));
     setSessions((prev) =>
@@ -567,10 +540,7 @@ function SessionsPage() {
     }
   };
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(pagination.total / pagination.limit),
-  );
+  const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
 
   if (error && sessions.length === 0) {
     return (
@@ -598,47 +568,40 @@ function SessionsPage() {
             <AlertDialogTitle>Delete Session</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete{" "}
-              <span className="  font-semibold">
-                {sessionToDelete?.id .toUpperCase()}
+              <span className="font-semibold">
+                {sessionToDelete?.id.toUpperCase()}
               </span>
               ? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={!!deletingId}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={!!deletingId}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={!!deletingId}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deletingId ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                "Delete"
-              )}
+              {deletingId ? <Loader2 size={14} className="animate-spin" /> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <div className="flex flex-col gap-4 p-4 md:p-6 min-h-full bg-background">
-        {/* ── Header ──────────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-foreground tracking-tight">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-xl font-bold text-foreground tracking-tight truncate">
               Game Sessions
             </h1>
             {savingOrder && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                 <Loader2 size={12} className="animate-spin" />
-                Saving order…
+                <span className="hidden sm:inline">Saving order…</span>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="hidden sm:inline text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
               {pagination.total} sessions
             </span>
             <Button
@@ -651,16 +614,13 @@ function SessionsPage() {
             >
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             </Button>
-            <Button
-              className="cursor-pointer hover:opacity-80"
-              onClick={openCreate}
-            >
-              <Plus /> New Session
+            <Button className="cursor-pointer hover:opacity-80 gap-1" onClick={openCreate}>
+              <Plus size={15} />
+              <span className="hidden sm:inline">New Session</span>
             </Button>
           </div>
         </div>
 
-        {/* ── Filters ─────────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -700,7 +660,6 @@ function SessionsPage() {
             ))}
           </div>
 
-          {/* Drag hint */}
           {sessions.length > 1 && !loading && (
             <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1.5">
               <GripVertical size={11} />
@@ -709,7 +668,6 @@ function SessionsPage() {
           )}
         </div>
 
-        {/* ── Mobile cards ────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 md:hidden">
           {loading ? (
             <CardSkeleton />
@@ -744,6 +702,7 @@ function SessionsPage() {
                   toggling={togglingIds.has(session.id)}
                   onToggleForceWin={handleToggleForceWin}
                   onEdit={openEdit}
+                  onDelete={openDeleteDialog}
                   isDragging={mobileDragging === index}
                   dragHandleProps={{
                     onMouseDown: () => handleMobileDragStart(index),
@@ -754,7 +713,6 @@ function SessionsPage() {
           )}
         </div>
 
-        {/* ── Desktop table ────────────────────────────────────────────────────── */}
         <div className="hidden md:block rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
@@ -772,9 +730,6 @@ function SessionsPage() {
                 <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Status
                 </TableHead>
-                {/* <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">
-                  Force Win
-                </TableHead> */}
                 <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">
                   Actions
                 </TableHead>
@@ -806,9 +761,7 @@ function SessionsPage() {
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
                     onDelete={openDeleteDialog}
-                    isDragOver={
-                      dragOverIndex === index && draggingIndex !== index
-                    }
+                    isDragOver={dragOverIndex === index && draggingIndex !== index}
                     isDragging={draggingIndex === index}
                   />
                 ))
@@ -817,37 +770,29 @@ function SessionsPage() {
           </Table>
         </div>
 
-        {/* ── Pagination ───────────────────────────────────────────────────────── */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between pt-1 gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Page {pagination.page} of {totalPages} · {pagination.total} total
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap justify-end">
               <Button
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 border-border text-muted-foreground hover:text-foreground"
                 disabled={pagination.page <= 1 || loading}
-                onClick={() =>
-                  setPagination((p) => ({ ...p, page: p.page - 1 }))
-                }
+                onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
               >
                 <ChevronLeft size={14} />
               </Button>
-              {Array.from(
-                { length: Math.min(totalPages, 7) },
-                (_, i) => i + 1,
-              ).map((p) => (
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map((p) => (
                 <Button
                   key={p}
                   variant={p === pagination.page ? "default" : "ghost"}
                   size="icon"
                   className="h-8 w-8 text-xs"
                   disabled={loading}
-                  onClick={() =>
-                    setPagination((prev) => ({ ...prev, page: p }))
-                  }
+                  onClick={() => setPagination((prev) => ({ ...prev, page: p }))}
                 >
                   {p}
                 </Button>
@@ -857,9 +802,7 @@ function SessionsPage() {
                 size="icon"
                 className="h-8 w-8 border-border text-muted-foreground hover:text-foreground"
                 disabled={pagination.page >= totalPages || loading}
-                onClick={() =>
-                  setPagination((p) => ({ ...p, page: p.page + 1 }))
-                }
+                onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
               >
                 <ChevronRight size={14} />
               </Button>

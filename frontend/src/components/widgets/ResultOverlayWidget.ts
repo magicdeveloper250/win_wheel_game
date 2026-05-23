@@ -1,6 +1,6 @@
-
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import { DropShadowFilter } from "pixi-filters";
+import type { GameBet } from "@/lib/types";
 
 export class ResultOverlayWidget {
   container: Container;
@@ -23,7 +23,12 @@ export class ResultOverlayWidget {
     this.container.eventMode = "none";
 
     this.container.filters = [
-      new DropShadowFilter({ offset: { x: 0, y: 6 }, blur: 16, alpha: 0.75, color: 0x000000 }),
+      new DropShadowFilter({
+        offset: { x: 0, y: 6 },
+        blur: 16,
+        alpha: 0.75,
+        color: 0x000000,
+      }),
     ];
 
     this.card = new Container();
@@ -37,7 +42,12 @@ export class ResultOverlayWidget {
     // Letter (large, left side)
     this.letterTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 28, fill: 0xffd700, fontWeight: "bold" }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 28,
+        fill: 0xffd700,
+        fontWeight: "bold",
+      }),
     });
     this.letterTxt.anchor.set(0.5, 0.5);
     this.card.addChild(this.letterTxt);
@@ -45,7 +55,12 @@ export class ResultOverlayWidget {
     // Result message
     this.msgTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 13, fill: 0xffffff, fontWeight: "bold" }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 13,
+        fill: 0xffffff,
+        fontWeight: "bold",
+      }),
     });
     this.msgTxt.anchor.set(0, 0.5);
     this.card.addChild(this.msgTxt);
@@ -53,7 +68,12 @@ export class ResultOverlayWidget {
     // Points
     this.ptsTxt = new Text({
       text: "",
-      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 20, fill: 0x7cfc00, fontWeight: "bold" }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 20,
+        fill: 0x7cfc00,
+        fontWeight: "bold",
+      }),
     });
     this.ptsTxt.anchor.set(0, 0.5);
     this.card.addChild(this.ptsTxt);
@@ -61,7 +81,11 @@ export class ResultOverlayWidget {
     // "tap to dismiss" hint — bottom right corner
     this.dismissTxt = new Text({
       text: "tap to dismiss",
-      style: new TextStyle({ fontFamily: "Century Gothic", fontSize: 10, fill: 0xffffff }),
+      style: new TextStyle({
+        fontFamily: "Century Gothic",
+        fontSize: 10,
+        fill: 0xffffff,
+      }),
     });
     this.dismissTxt.alpha = 0.45;
     this.dismissTxt.anchor.set(1, 1);
@@ -85,10 +109,10 @@ export class ResultOverlayWidget {
 
     // Card is anchored top-left from (-cW/2, -cH/2) so its center is at (0,0)
     const letterX = -(cW / 2 - cH * 0.48);
-    const textX = letterX + cH * 0.40;
+    const textX = letterX + cH * 0.4;
     const fs = Math.round(cH * 0.36);
-    const fsSmall = Math.round(cH * 0.20);
-    const fsPts = Math.round(cH * 0.30);
+    const fsSmall = Math.round(cH * 0.2);
+    const fsPts = Math.round(cH * 0.3);
 
     this.letterTxt.style.fontSize = Math.max(16, fs);
     this.letterTxt.x = letterX;
@@ -115,7 +139,7 @@ export class ResultOverlayWidget {
     return this.card;
   }
 
-  show(letter: string, number: number, points: number, prizeLabel?: string, multiplier?: number, fixedBonus?: number): void {
+  show(isWin: GameBet[] | undefined, text: string): void {
     if (this.animFrame !== null) {
       cancelAnimationFrame(this.animFrame);
       this.animFrame = null;
@@ -127,33 +151,27 @@ export class ResultOverlayWidget {
     const cH = this.cardH;
     const r = Math.round(cH * 0.22);
 
-    this.letterTxt.text = letter;
-
-    if (points === 0) {
-      this.msgTxt.text = `Letter ${letter}  ·  Number ${number}`;
-      this.ptsTxt.text = "Zero! 😬";
-      this.ptsTxt.style.fill = 0x999999;
+    if (isWin === undefined || isWin.length === 0) {
+      this.letterTxt.text = "✕";
+      this.letterTxt.style.fill = 0xff4444;
+      this.msgTxt.text = text;
+      this.msgTxt.style.fill = 0xffaaaa;
+      this.ptsTxt.text = "";
       this.bg.clear();
       this.bg.roundRect(-cW / 2, -cH / 2, cW, cH, r);
-      this.bg.fill({ color: 0x1a0a0a, alpha: 0.96 });
-      this.bg.stroke({ color: 0x555555, width: 2 });
-    } else if (prizeLabel && multiplier && multiplier > 1) {
-      // Prediction prize won
-      this.msgTxt.text = `${prizeLabel}  ×${multiplier} + ${fixedBonus}pts bonus`;
-      this.ptsTxt.text = `+${points} pts 🎯`;
+      this.bg.fill({ color: 0x1a0505, alpha: 0.97 });
+      this.bg.stroke({ color: 0xff3333, width: 2 });
+    } else {
+      this.letterTxt.text = "✓";
+      this.letterTxt.style.fill = 0x7cfc00;
+      this.msgTxt.text = text;
+      this.msgTxt.style.fill = 0xffffff;
+      this.ptsTxt.text = "";
       this.ptsTxt.style.fill = 0xffd700;
       this.bg.clear();
       this.bg.roundRect(-cW / 2, -cH / 2, cW, cH, r);
-      this.bg.fill({ color: 0x1a0d00, alpha: 0.97 });
-      this.bg.stroke({ color: 0xffd700, width: 2.5 });
-    } else {
-      this.msgTxt.text = `Letter ${letter}  ×  ${number} pts`;
-      this.ptsTxt.text = `+${points} 🎉`;
-      this.ptsTxt.style.fill = points >= 30 ? 0xffd700 : 0x7cfc00;
-      this.bg.clear();
-      this.bg.roundRect(-cW / 2, -cH / 2, cW, cH, r);
-      this.bg.fill({ color: 0x0d2a5e, alpha: 0.96 });
-      this.bg.stroke({ color: 0xffd700, width: 2 });
+      this.bg.fill({ color: 0x071a03, alpha: 0.97 });
+      this.bg.stroke({ color: 0x7cfc00, width: 2.5 });
     }
 
     // Pop-in

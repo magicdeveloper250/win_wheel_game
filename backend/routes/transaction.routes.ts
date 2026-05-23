@@ -37,13 +37,18 @@ router.post("/transactions/deposit", authenticate, async (req, res) => {
   try {
     const amount = Number(req.body?.amount);
     const provider = req.body?.provider as "MOMO" | "AIRTEL_MONEY";
+    const userId= req.body?.userId
+    const phoneNumber= req.body.phoneNumber
+ 
     if (!["MOMO", "AIRTEL_MONEY"].includes(provider)) {
       return res.status(400).json({ error: "Invalid provider." });
     }
     const tx = await createDeposit({
-      userId: (req as any).user.id,
+      userId ,
       amount,
       provider,
+      phoneNumber
+      
     });
     res.status(201).json(tx);
   } catch (error: any) {

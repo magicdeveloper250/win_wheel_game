@@ -31,6 +31,7 @@ import { gameHistory, type HistoryEntry } from "@/contexts/GameHistoryContext";
 import { buildRingContainer, RING_FILTERS } from "@/lib/wheelBuilder";
 import useUserAxios from "@/hooks/useUserAxios";
 import type {
+  GameBet,
   GameFinancialSetting,
   GameSession,
   GameTargetNumberSetting,
@@ -40,12 +41,24 @@ import { toast } from "sonner";
 import { MagnifierLens } from "@/lib/magnifierLens";
 import { useLiveGameWs } from "@/hooks/useLiveGameWs";
 import Logo from "@/components/ui/Logo";
-import { ChevronLeft, CreditCard, Loader2 } from "lucide-react";
+import {
+  ChevronLeft,
+  CreditCard,
+  Ellipse,
+  Ellipsis,
+  List,
+  Loader2,
+  Menu,
+  MoreVertical,
+} from "lucide-react";
 import UserMoneyDialog from "@/components/ui/UserMoneyDialog";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import useSession from "@/hooks/useSession";
-import { cn } from "@/lib/utils";
+import { BetSlipDialog } from "@/components/ui/BetSlipDialog";
+import TicketBetDialog from "@/components/ui/TicketBetDialog";
+import VerifyTicketDialog from "@/components/ui/VerifyTicketDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // ── Module-level singletons ───────────────────────────────────────────────────
 let globalApp: Application | null = null;
@@ -169,7 +182,13 @@ const GamePage: React.FC = () => {
   const openOddsModal = useCallback(() => setShowOddsModal(true), []);
   const closeOddsModal = useCallback(() => setShowOddsModal(false), []);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [myActiveBets, setMyActiveBets] = useState<GameBet[] | null>(null);
   const userSession = useSession();
+  const [betSlipOpen, setBetSlipOpen] = useState(false);
+  const [sessionResult, setSessionResult] = useState<{
+    winNumber: number;
+    winMultiplier: string;
+  } | null>(null);
   const extractFinancialSetting = (
     payload: unknown,
   ): GameFinancialSetting | null => {
@@ -190,6 +209,7 @@ const GamePage: React.FC = () => {
   }, [middleSegments]);
   useEffect(() => {
     activeSessionRef.current = activeSession;
+    gameStatus.onRoundChange(activeSession?.sessionNumber as number);
   }, [activeSession]);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -200,7 +220,8 @@ const GamePage: React.FC = () => {
         resp.data.data.map((n: GameTargetNumberSetting) => ({
           label: String(n.targetNumber),
           color: n.color ? parseInt(n.color.replace("#", "0x")) : 0xef4444,
-          value: n.targetNumber,
+          value: String(n.targetNumber),
+          multiplier: n.multiplierNumber,
         })),
       );
     } catch {
@@ -215,7 +236,8 @@ const GamePage: React.FC = () => {
         resp.data.data.map((n: GameWinMultiplierSetting) => ({
           label: n.multiplierLetter.toUpperCase(),
           color: n.color ? parseInt(n.color.replace("#", "0x")) : 0xef4444,
-          value: n.winMultiplier,
+          value: n.multiplierLetter.toUpperCase(),
+          multiplier: n.winMultiplier,
         })),
       );
     } catch {
@@ -242,10 +264,14 @@ const GamePage: React.FC = () => {
   }, [financialSetting]);
 
   const fetchActiveSession = async () => {
+    setMyActiveBets(null);
     try {
       const resp = await axios.get("/sessions/active");
-      setActiveSession(resp.data);
+      setActiveSession({ ...resp.data, ...resp.data.session });
       setAlreadyBetted(resp.data.betted);
+      if (resp.data.betted === true) {
+        setMyActiveBets(resp.data.myBets);
+      }
       predictionPanelRef.current?.enable();
       applyMinBetAmount();
 
@@ -270,34 +296,45 @@ const GamePage: React.FC = () => {
     } catch (error) {}
   };
 
-   const stopKeyIfInputFocused = (e: KeyboardEvent) => {
-          const a = document.activeElement;
-          if (
-            a instanceof HTMLInputElement ||
-            a instanceof HTMLTextAreaElement ||
-            a instanceof HTMLSelectElement ||
-            a?.closest("[role='dialog']")
-          )
-            e.stopImmediatePropagation();
-        };
-
+  const stopKeyIfInputFocused = (e: KeyboardEvent) => {
+    const a = document.activeElement;
+    if (
+      a instanceof HTMLInputElement ||
+      a instanceof HTMLTextAreaElement ||
+      a instanceof HTMLSelectElement ||
+      a?.closest("[role='dialog']")
+    )
+      e.stopImmediatePropagation();
+  };
   const fetchLatestBets = async () => {
     try {
       const resp = await axios.get("/bets/latest");
       setLatestBets(
-        resp.data.map((b: any) => ({
-          gameId: b.sessionId.substring(5), // use last digit of sessionId as gameId
-          letter:
-            middleSegments.find((s) => Number(s.value) == b.winMultiplier)
-              ?.label ?? "",
-          number: b.winNumber,
-          segmentColor:
-            outerSegments.find((s) => Number(s.value) == b.winNumber)?.color ??
-            0x1a1a1a,
-          timestamp: new Date(b.createdAt).getTime(),
-          isZero: b.winNumber === 0,
-          points: b.winNumber,
-        })),
+        resp.data.map((b: any) => {
+          const raw = b.winMultiplier as string;
+          const isLetter = /^[a-zA-Z]/.test(raw);
+          const multiplierLetter = isLetter
+            ? raw.substring(0, 1).toUpperCase()
+            : "";
+
+          return {
+            gameId: b.sessionId.substring(5),
+            letter: multiplierLetter,
+            number: b.winNumber,
+            segmentColor:
+              outerSegmentsRef.current.find(
+                (s) => String(s.value) === String(b.winNumber),
+              )?.color ?? 0x1a1a1a,
+            letterColor: multiplierLetter
+              ? (middleSegmentsRef.current.find(
+                  (s) => s.value === multiplierLetter,
+                )?.color ?? 0x1a1a1a)
+              : 0x1a1a1a,
+            timestamp: new Date(b.createdAt).getTime(),
+            isZero: b.winNumber === 0,
+            points: b.winNumber,
+          };
+        }),
       );
     } catch (error) {
       toast.error("Failed to fetch latest bets.", { position: "top-right" });
@@ -306,11 +343,21 @@ const GamePage: React.FC = () => {
 
   // ── Spin wheel ─────────────────────────────────────────────────────────────
   const spinWheelRef = useRef<
-    (targetWinNumber: number, targetMultiplierLetter: string) => void
+    (
+      targetWinNumber: number,
+      targetMultiplierLetter: string,
+      activeBets: any,
+      result: any,
+    ) => void
   >(() => {});
 
   const spinWheel = useCallback(
-    (targetWinNumber: number, targetMultiplierLetter: string) => {
+    (
+      targetWinNumber: number,
+      targetMultiplierLetter: string,
+      activeBets: any,
+      result: any,
+    ) => {
       if (spinningRef.current || !outerRingRef.current || !midRingRef.current)
         return;
       spinningRef.current = true;
@@ -430,29 +477,52 @@ const GamePage: React.FC = () => {
             spinningRef.current = false;
             return;
           }
+          const winNumber = result?.winNumber ?? targetWinNumber;
+          const winMultiplier = result?.winMultiplier ?? targetMultiplierLetter;
 
-          const basePoints =
-            typeof outerSeg.value === "number" ? outerSeg.value : 0;
+          const winMultiplierLetter = String(winMultiplier)
+            .trim()
+            .charAt(0)
+            .toUpperCase();
+
+          const isWin =
+            activeBets?.filter((b: any) => {
+              const betTarget = String(b.targetNumber).trim().toUpperCase();
+              return (
+                Number(b.targetNumber) === Number(winNumber) ||
+                betTarget === winMultiplierLetter
+              );
+            }) ?? [];
+          let resultText = "";
+
+          const amountWon = () => {
+            if (isWin && isWin.length > 0) {
+              return isWin.reduce(
+                (sum: any, bet: any) => sum + bet.amount * bet.multiplierNumber,
+                0,
+              );
+            }
+            return 0;
+          };
+          if (isWin && isWin.length > 0) {
+            const amountWonValue = amountWon();
+            resultText = `You won ${amountWonValue} RWF!`;
+          } else {
+            resultText = "Better luck next time!";
+          }
 
           if (innerLetterRef.current)
             innerLetterRef.current.text = midSeg.label;
 
           setTimeout(() => {
-            audioManager.playWin(basePoints);
-            gameStatus.onSpinComplete(midSeg.label, basePoints, basePoints);
+            audioManager.playWin(isWin);
+            gameStatus.onSpinComplete(outerSeg, midSeg);
 
             if (resultOverlayRef.current && layoutRef.current) {
               const wheelCenterX =
                 wheelContainerRef.current?.getGlobalPosition().x ??
                 layoutRef.current.btnCenterX;
-              resultOverlayRef.current.show(
-                midSeg.label,
-                basePoints,
-                basePoints,
-                undefined,
-                undefined,
-                undefined,
-              );
+              resultOverlayRef.current.show(isWin, resultText);
               resultOverlayRef.current.setPosition(
                 wheelCenterX,
                 layoutRef.current.btnAreaY - 20,
@@ -528,12 +598,18 @@ const GamePage: React.FC = () => {
       }
 
       case "spin_result": {
+        setSessionResult(
+          latestEvent.result as { winNumber: number; winMultiplier: string },
+        );
         spinWheelRef.current(
-          latestEvent.winNumber as number,
-          latestEvent.winMultiplier as string,
+          latestEvent.winNumber,
+          latestEvent.winMultiplier,
+          myActiveBets,
+          latestEvent.result,
         );
         fetchBalance();
         fetchLatestBets();
+        fetchActiveSession();
         break;
       }
 
@@ -558,7 +634,7 @@ const GamePage: React.FC = () => {
     }
 
     const selectedNumbers =
-      predictionPanelRef.current?.getSelectedNumbers() ?? [];
+      predictionPanelRef.current?.getSelectedValues() ?? [];
     if (selectedNumbers.length === 0) {
       toast.error("Please select at least one number.", {
         position: "top-right",
@@ -584,6 +660,7 @@ const GamePage: React.FC = () => {
       toast.success("Bet placed! Waiting for spin...", {
         position: "top-right",
       });
+      audioManager.playSuccess();
       predictionPanelRef.current?.clearBetInput();
       predictionPanelRef.current?.setEnabled(false);
       predictionPanelRef.current?.setEnabled(false);
@@ -595,8 +672,10 @@ const GamePage: React.FC = () => {
       }
     } catch (err: any) {
       toast.error(err?.response?.data?.error ?? "Failed to place bet.");
+      audioManager.playError();
     } finally {
       predictionPanelRef.current?.setSubmitting(false);
+      fetchActiveSession();
     }
   }, [axios]);
 
@@ -727,7 +806,7 @@ const GamePage: React.FC = () => {
 
       magnifierRef.current?.destroy();
       const LENS_R = 110;
-      const magnifier = new MagnifierLens(app, wheelContainer, LENS_R, 3);
+      const magnifier = new MagnifierLens(app, wheelContainer, LENS_R, 1.5);
       const wheelRightEdge = layout.wheelX + OUTER_RADIUS * layout.wheelScale;
       const wheelRadiusPx = OUTER_RADIUS * layout.wheelScale;
       const isPhoneLayout =
@@ -745,7 +824,7 @@ const GamePage: React.FC = () => {
         outerSegments,
         MIDDLE_RADIUS,
         OUTER_RADIUS,
-        26,
+        Math.round(26 * layout.wheelScale),
       );
       outer.filters = RING_FILTERS();
       wheelContainer.addChild(outer);
@@ -756,6 +835,7 @@ const GamePage: React.FC = () => {
         INNER_RADIUS,
         MIDDLE_RADIUS,
         70,
+        true,
       );
       mid.filters = RING_FILTERS();
       wheelContainer.addChild(mid);
@@ -923,28 +1003,6 @@ const GamePage: React.FC = () => {
       const midLabels = new Container();
       wheelContainer.addChild(midLabels);
       midLabelsRef.current = midLabels;
-      const midAngleStep = (Math.PI * 2) / (middleSegments.length || 1);
-      middleSegments.forEach((seg, i) => {
-        const midA = i * midAngleStep - Math.PI / 2 + midAngleStep / 2;
-        const labelR = (INNER_RADIUS + MIDDLE_RADIUS) / 2;
-        const lbl = new Text({
-          text: seg.label,
-          style: new TextStyle({
-            fontFamily: "Arial, sans-serif",
-            fontSize: 70,
-            fill: 0xffffff,
-            fontWeight: "bold",
-          }),
-        });
-        lbl.resolution = 2;
-        lbl.roundPixels = true;
-        lbl.anchor.set(0.5, 0.5);
-        lbl.x = Math.cos(midA) * labelR;
-        lbl.y = Math.sin(midA) * labelR;
-        lbl.rotation =
-          Math.cos(midA) < 0 ? midA - Math.PI / 2 : midA + Math.PI / 2;
-        midLabels.addChild(lbl);
-      });
 
       if (wheelTextures.outerTrim) {
         const trim = new Sprite(wheelTextures.outerTrim);
@@ -986,7 +1044,7 @@ const GamePage: React.FC = () => {
         wheelContainer.addChild(ptr);
       }
 
-      const { btnAreaY, spinBtnH, pad } = layout;
+      const { btnAreaY } = layout;
 
       focusManagerRef.current?.addItem(
         centerContainer,
@@ -1001,7 +1059,7 @@ const GamePage: React.FC = () => {
         layout.mode !== "phone-landscape"
       ) {
         const hint = new Text({
-          text: "Select a number · enter bet amount · confirm  |  Tab / ← → to navigate",
+          text: "Select a number or letter · enter bet amount · confirm  |  Tab / ← → to navigate",
           style: new TextStyle({
             fontFamily: "Century Gothic",
             fontSize: Math.max(9, Math.round(10 * layout.uiScale)),
@@ -1011,14 +1069,17 @@ const GamePage: React.FC = () => {
         });
         hint.anchor.set(0.5, 0);
         hint.x = layout.wheelX;
-        hint.y = btnAreaY + spinBtnH / 2 + pad;
+        hint.y = H - layout.statusBarH - 30;
         app.stage.addChild(hint);
 
         const oddsBtn = new Container();
+        (oddsBtn as any)._isOddsBtn = true;
         oddsBtn.eventMode = "static";
         oddsBtn.cursor = "pointer";
-        oddsBtn.x = hint.x + Math.max(230, Math.round(220 * layout.uiScale));
-        oddsBtn.y = hint.y - 2;
+        oddsBtn.x = W - 120;
+        oddsBtn.y = H - layout.statusBarH - 42;
+        oddsBtn.zIndex = 100;
+
         const oddsBg = new Graphics();
         const oddsW = Math.max(64, Math.round(68 * layout.uiScale));
         const oddsH = Math.max(24, Math.round(26 * layout.uiScale));
@@ -1083,13 +1144,14 @@ const GamePage: React.FC = () => {
       resultOverlayRef.current.container.zIndex = 50;
       app.stage.addChild(resultOverlayRef.current.container);
 
-      // ── Status bar ────────────────────────────────────────────────────────
       statusBarWidgetRef.current = new StatusBarWidget(
         gameStatus,
         layout,
         focusManagerRef.current,
       );
       statusBarWidgetRef.current.container.y = H - layout.statusBarH;
+      statusBarWidgetRef.current.container.visible =
+        layout.mode !== "phone-portrait" && layout.mode !== "phone-landscape";
       app.stage.addChild(statusBarWidgetRef.current.container);
 
       // ── Prediction PANEL (inline, not modal) ─────────────────────────────
@@ -1097,7 +1159,7 @@ const GamePage: React.FC = () => {
       predictionPanelRef.current = new PredictionPanel(
         predictionCtx,
         focusManagerRef.current,
-        outerSegments,
+        [...outerSegments, ...middleSegments],
       );
 
       // Apply margin around panel
@@ -1129,37 +1191,51 @@ const GamePage: React.FC = () => {
         );
       }
 
-      // Group history + wheel + betting panel so they can be centered together
+      // Group history + wheel + betting panel — fills full screen width
       if (layout.historyVisible && historyWidgetRef.current) {
         const arenaContainer = new Container();
         const historyContainer = historyWidgetRef.current.container;
         const panelContainer = predictionPanelRef.current.container;
         const sideGap = Math.round(layout.pad + panelMargin);
 
+        const wheelDiameter = wheelRadiusPx * 2;
+
+        // Fixed column widths based on screen percentage
+        const historyColW = Math.round(W * 0.14);
+        const wheelColW = Math.round(W * 0.55);
+        const panelColW = W - historyColW - wheelColW - layout.pad * 2;
+
+        // Re-layout panel to fill its column
+        const stretchedPanelW = Math.max(200, panelColW - sideGap);
+        predictionPanelRef.current!.layout(
+          0,
+          0,
+          stretchedPanelW,
+          pRect.h - panelMargin * 2,
+        );
+
         const arenaHeight = Math.max(
           historyContainer.height,
           panelContainer.height,
-          wheelRadiusPx * 2,
+          wheelDiameter,
         );
 
+        // History — left column
         historyContainer.x = 0;
         historyContainer.y = Math.round(
           (arenaHeight - historyContainer.height) / 2,
         );
 
-        wheelContainer.x = Math.round(
-          historyContainer.width + sideGap + wheelRadiusPx,
-        );
+        // Wheel — middle column, centered in its column
+        wheelContainer.x = Math.round(historyColW + wheelColW / 2);
         wheelContainer.y = Math.round(arenaHeight / 2);
 
-        panelContainer.x = Math.round(
-          wheelContainer.x + wheelRadiusPx + sideGap,
-        );
+        // Panel — right column
+        panelContainer.x = Math.round(historyColW + wheelColW + layout.pad);
         panelContainer.y = Math.round(
           (arenaHeight - panelContainer.height) / 2,
         );
 
-        const arenaWidth = Math.round(panelContainer.x + panelContainer.width);
         const minArenaY = layout.headerH + layout.pad;
         const maxArenaY = H - layout.statusBarH - layout.pad - arenaHeight;
         const arenaY = Math.max(
@@ -1167,10 +1243,8 @@ const GamePage: React.FC = () => {
           Math.min(Math.round((H - arenaHeight) / 2), maxArenaY),
         );
 
-        arenaContainer.x = Math.max(
-          layout.pad,
-          Math.round((W - arenaWidth) / 2),
-        );
+        // Pin to left edge — no centering
+        arenaContainer.x = layout.pad;
         arenaContainer.y = arenaY;
 
         arenaContainer.addChild(historyContainer);
@@ -1188,12 +1262,18 @@ const GamePage: React.FC = () => {
         const lensY = wheelGlobalY;
         magnifier.moveTo(lensX, lensY);
         resultOverlayRef.current?.setPosition(wheelGlobalX, btnAreaY - 20);
-        // Keep helper hint centered with the wheel after grouped re-layout.
         const hintNode = app.stage.children.find(
           (child) =>
             child instanceof Text && (child as Text).text.includes("Tab /"),
         ) as Text | undefined;
         if (hintNode) hintNode.x = wheelGlobalX;
+
+        const oddsBtnNode = app.stage.children.find(
+          (child) => (child as any)._isOddsBtn,
+        ) as Container | undefined;
+        if (oddsBtnNode) {
+          oddsBtnNode.x = W - 120;
+        }
       }
 
       // Mobile mini history strip between score bar and wheel
@@ -1274,7 +1354,7 @@ const GamePage: React.FC = () => {
         while (mountRef.current.firstChild)
           mountRef.current.removeChild(mountRef.current.firstChild);
         mountRef.current.appendChild(app.canvas);
-       
+
         window.addEventListener("keydown", stopKeyIfInputFocused, true);
         window.addEventListener("keyup", stopKeyIfInputFocused, true);
         window.addEventListener("keypress", stopKeyIfInputFocused, true);
@@ -1350,11 +1430,17 @@ const GamePage: React.FC = () => {
 
     setSceneBuilt(false);
     loadWheelTextures().finally(() => {
-  if (appRef.current) buildScene(appRef.current);
-  const a = document.activeElement;
-  const safe = !(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement || a?.closest("[role='dialog']"));
-  if (safe) appRef.current?.canvas && (appRef.current.canvas as HTMLElement).focus();
-});
+      if (appRef.current) buildScene(appRef.current);
+      const a = document.activeElement;
+      const safe = !(
+        a instanceof HTMLInputElement ||
+        a instanceof HTMLTextAreaElement ||
+        a?.closest("[role='dialog']")
+      );
+      if (safe)
+        appRef.current?.canvas &&
+          (appRef.current.canvas as HTMLElement).focus();
+    });
   }, [appReady, outerSegments, middleSegments, buildScene]);
 
   useEffect(() => {
@@ -1409,22 +1495,89 @@ const GamePage: React.FC = () => {
           className="flex gap-2 items-center justify-center mb-2"
         >
           <ChevronLeft />
-          <Logo />
+          <span className="hidden lg:inline"><Logo/></span>
+           
         </Link>
       </div>
 
-      <div
-        style={{
-          position: "fixed",
-          top: "max(28px, 4vh)",
-          left: "max(12px, 70vw)",
-          paddingTop: "",
-        }}
-      >
-        <Button onClick={() => setDepositOpen(true)} className={cn(" py-0")}>
-          <CreditCard /> Deposit
-        </Button>
-        <div className="font-bold items-end flex justify-end">
+      <div className="fixed top-[max(28px,4vh)] left-[max(12px,85vw)] lg:left-auto lg:right-4 lg:top-[max(28px,4vh)] flex flex-col items-end gap-1">
+        <div className="flex gap-1">
+          <div className="hidden lg:flex gap-1">
+            <VerifyTicketDialog />
+            <TicketBetDialog onSuccess={fetchActiveSession} />
+            <Button
+              onClick={() => setDepositOpen(true)}
+              className="py-0"
+              size="sm"
+            >
+              <CreditCard className="shrink-0" />
+              <span className="ml-1">Deposit</span>
+            </Button>
+            {myActiveBets && myActiveBets.length > 0 && (
+              <Button
+                onClick={() => setBetSlipOpen(true)}
+                className="py-0 border border-primary text-primary"
+                variant="secondary"
+                size="sm"
+              >
+                <List className="shrink-0" />
+                <span className="ml-1">Bet slip</span>
+              </Button>
+            )}
+          </div>
+
+          <div className="flex gap-1 lg:hidden">
+            {myActiveBets && myActiveBets.length > 0 && (
+              <Button
+                onClick={() => setBetSlipOpen(true)}
+                className="py-0 border border-primary text-primary"
+                variant="secondary"
+                size="sm"
+              >
+                <List className="shrink-0" />
+              </Button>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" className="py-0">
+                  <Menu size={15} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                  Actions
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+          
+                <DropdownMenuItem asChild>
+                  <div className="cursor-pointer">
+                    <VerifyTicketDialog />
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <div className="cursor-pointer">
+                    <TicketBetDialog onSuccess={fetchActiveSession} />
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => setDepositOpen(true)}
+                  className="gap-2 cursor-pointer"
+                >
+                  <CreditCard size={14} />
+                  Deposit
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="font-extrabold flex justify-end">
           <span className="text-sm">
             {Number(userSession.session?.balance).toFixed(2)}
           </span>
@@ -1456,95 +1609,258 @@ const GamePage: React.FC = () => {
           <div className="text-2xl ">
             <Logo />
           </div>
-          <Loader2 className="animate-spin" />
+          <div className="flex gap-2 items-center justify-center">
+            {" "}
+            <span>Initializing </span>{" "}
+            <Ellipsis className="animate-pulse" size={24} />
+          </div>
         </div>
       )}
 
       {showOddsModal && (
         <div
           onClick={closeOddsModal}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 60,
-            background: "rgba(2, 8, 23, 0.62)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "16px",
-          }}
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm transition-all duration-300"
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
             style={{
-              width: "min(480px, 94vw)",
-              maxHeight: "80vh",
-              overflowY: "auto",
-              background: "#081a42",
-              border: "1px solid #2a5298",
-              borderRadius: "14px",
-              boxShadow: "0 18px 48px rgba(2, 6, 23, 0.55)",
-              padding: "16px 16px 14px",
-              color: "#dbeafe",
-              position: "relative",
+              background: "linear-gradient(145deg, #071630 0%, #030a1a 100%)",
+              borderRadius: "11px",
+              boxShadow:
+                "0 8px 24px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)",
+              border: "1.5px solid rgba(34, 85, 204, 0.8)",
             }}
           >
-            <button
-              type="button"
-              onClick={closeOddsModal}
-              aria-label="Close odds modal"
-              style={{
-                position: "absolute",
-                top: "8px",
-                right: "10px",
-                width: "28px",
-                height: "28px",
-                borderRadius: "999px",
-                border: "1px solid #3b82f6",
-                background: "#0b1f4a",
-                color: "#e2e8f0",
-                fontSize: "18px",
-                lineHeight: "24px",
-                cursor: "pointer",
-              }}
-            >
-              ×
-            </button>
             <div
+              className="absolute inset-0 pointer-events-none"
               style={{
-                fontWeight: 800,
-                fontSize: "18px",
-                color: "#facc15",
-                letterSpacing: "0.04em",
-                marginBottom: "12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(255,255,255,0.06)",
+                margin: "2px",
+              }}
+            />
+
+            {/* Header */}
+            <div
+              className="relative flex items-center justify-between px-6 py-3"
+              style={{
+                background: "linear-gradient(90deg, #0f3080 0%, #0a2560 100%)",
+                borderBottom: "1px solid rgba(68, 119, 221, 0.6)",
               }}
             >
-              Multiplier Odds
+              <div
+                className="absolute top-0 left-0 right-0 pointer-events-none"
+                style={{
+                  height: "40%",
+                  background:
+                    "linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 100%)",
+                  borderRadius: "10px 10px 0 0",
+                }}
+              />
+
+              <div className="flex items-center gap-3 relative z-10">
+                <div
+                  className="w-1 h-6 rounded-full"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, #ffd700 0%, #ffaa00 100%)",
+                    boxShadow: "0 0 8px rgba(250,204,21,0.6)",
+                  }}
+                />
+                <h2
+                  className="text-lg font-black tracking-widest uppercase"
+                  style={{
+                    fontFamily: "Century Gothic, sans-serif",
+                    color: "#ffffff",
+                    letterSpacing: "2px",
+                  }}
+                >
+                  Multiplier Odds
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeOddsModal}
+                aria-label="Close odds modal"
+                className="relative w-8 h-8 flex items-center justify-center rounded-full text-slate-300 hover:text-white transition-all duration-200 text-xl leading-none z-10"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(68,119,221,0.4)",
+                }}
+              >
+                <span className="relative z-10">×</span>
+                <div className="absolute inset-0 rounded-full bg-white/0 hover:bg-white/10 transition-all duration-200" />
+              </button>
             </div>
-            <div style={{ display: "grid", gap: "8px" }}>
-              {[...middleSegments]
-                .sort((a, b) => Number(b.value) - Number(a.value))
-                .map((m, idx) => (
-                  <div
-                    key={`${m.label}-${idx}`}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      background: "#0b204f",
-                      border: "1px solid #23407a",
-                      borderRadius: "10px",
-                      padding: "10px 12px",
-                    }}
-                  >
-                    <span style={{ fontWeight: 700, color: "#e2e8f0" }}>
-                      {m.label}
-                    </span>
-                    <span style={{ fontWeight: 800, color: "#22c55e" }}>
-                      x{Number(m.value)}
-                    </span>
-                  </div>
-                ))}
+
+            {/* Body */}
+            <div
+              className="overflow-y-auto flex-1 p-5 space-y-5"
+              style={{
+                scrollbarWidth: "thin",
+                scrollbarColor: "#1a4a9e #0a1f45",
+              }}
+            >
+              <style jsx>{`
+                div::-webkit-scrollbar {
+                  width: 6px;
+                }
+                div::-webkit-scrollbar-track {
+                  background: #0a1f45;
+                  border-radius: 3px;
+                }
+                div::-webkit-scrollbar-thumb {
+                  background: #1a4a9e;
+                  border-radius: 3px;
+                }
+                div::-webkit-scrollbar-thumb:hover {
+                  background: #2a5abe;
+                }
+              `}</style>
+
+              {/* Letter Values Section */}
+              <section>
+                <p
+                  className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+                  style={{ color: "#6688bb", letterSpacing: "2px" }}
+                >
+                  <span className="inline-block w-5 h-px bg-gradient-to-r from-yellow-400 to-transparent" />
+                  Letter Values
+                  <span className="inline-block flex-1 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[...middleSegments]
+                    .sort((a, b) => Number(b.value) - Number(a.value))
+                    .map((m, idx) => (
+                      <div
+                        key={`mid-${m.label}-${idx}`}
+                        className="relative flex items-center justify-between rounded-lg px-4 py-3 overflow-hidden transition-all duration-200 cursor-pointer group"
+                        style={{
+                          background: `linear-gradient(135deg, #${m.color.toString(16).padStart(6, "0")} 0%, #${m.color.toString(16).padStart(6, "0")}CC 100%)`,
+                          transform: "translateY(0)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow =
+                            "0 8px 20px -8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow =
+                            "inset 0 1px 0 rgba(255,255,255,0.1)";
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <span
+                          className="relative z-10 text-base font-black tracking-wider"
+                          style={{ color: "#ffffff" }}
+                        >
+                          {m.label}
+                        </span>
+                        <span
+                          className="relative z-10 text-sm font-extrabold tracking-wide"
+                          style={{ color: "#ffd700" }}
+                        >
+                          ×{Number(m.multiplier)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </section>
+
+              <div className="h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+
+              {/* Number Values Section */}
+              <section>
+                <p
+                  className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+                  style={{ color: "#6688bb", letterSpacing: "2px" }}
+                >
+                  <span className="inline-block w-5 h-px bg-gradient-to-r from-yellow-400 to-transparent" />
+                  Number Values
+                  <span className="inline-block flex-1 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[...outerSegments]
+                    .sort((a, b) => Number(a.label) - Number(b.label))
+                    .map((m, idx) => (
+                      <div
+                        key={`outer-${m.label}-${idx}`}
+                        className="relative flex items-center justify-between rounded-lg px-4 py-3 overflow-hidden transition-all duration-200 cursor-pointer group"
+                        style={{
+                          background: `linear-gradient(135deg, #${m.color.toString(16).padStart(6, "0")} 0%, #${m.color.toString(16).padStart(6, "0")}CC 100%)`,
+                          transform: "translateY(0)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow =
+                            "0 8px 20px -8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow =
+                            "inset 0 1px 0 rgba(255,255,255,0.1)";
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <span
+                          className="relative z-10 text-base font-black tracking-wider"
+                          style={{ color: "#ffffff" }}
+                        >
+                          {m.label}
+                        </span>
+                        <span
+                          className="relative z-10 text-sm font-extrabold tracking-wide"
+                          style={{ color: "#ffd700" }}
+                        >
+                          ×{m.multiplier}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </section>
+            </div>
+
+            {/* Footer */}
+            <div
+              className="px-6 py-3 text-center relative"
+              style={{
+                background: "rgba(7, 22, 48, 0.95)",
+                borderTop: "1px solid rgba(34, 85, 204, 0.6)",
+              }}
+            >
+              <div
+                className="absolute top-0 left-0 right-0 h-px pointer-events-none"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)",
+                }}
+              />
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                style={{ color: "#6688bb" }}
+              >
+                Final payout = number/letter value × number/letter multiplier
+              </p>
             </div>
           </div>
         </div>
@@ -1553,6 +1869,12 @@ const GamePage: React.FC = () => {
         open={depositOpen}
         onOpenChange={setDepositOpen}
         action="deposit"
+      />
+
+      <BetSlipDialog
+        open={betSlipOpen}
+        onOpenChange={setBetSlipOpen}
+        bets={myActiveBets || []}
       />
     </div>
   );

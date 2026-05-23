@@ -4,11 +4,11 @@ import { GameSessionStatus } from "../generated/prisma/enums";
 export const recordResult = async (params: {
   sessionId: string;
   winNumber: number;
-  winMultiplier: number;
+  winMultiplier: string;
 }) => {
   const session = await prisma.betSession.findUnique({
     where: { id: params.sessionId },
-    include: { gameBets: true,  session: { include: { multiplier: true } } },
+    include: { gameBets: true, session: { include: { multiplier: true } } },
   });
   if (!session) throw { error: "Session not found." };
   if (session.status === GameSessionStatus.COMPLETED)
@@ -23,10 +23,15 @@ export const recordResult = async (params: {
       },
     });
 
-    // Pay out winners
     for (const bet of session.gameBets) {
-      if (bet.targetNumber === params.winNumber) {
-        const payout = bet.amount.mul(params.winMultiplier);
+      if (bet.targetNumber === String(params.winNumber)) {
+        const payout = bet.amount.mul(bet.multiplierNumber ?? 1);
+
+        await tx.userAccount.update({
+          where: { userId: bet.userId },
+          data: { balance: { increment: payout } },
+        });
+
         await tx.transaction.create({
           data: {
             userId: bet.userId,
@@ -39,7 +44,7 @@ export const recordResult = async (params: {
     }
 
     await tx.gameSession.update({
-      where: { id: params.sessionId },
+      where: { id: session.sessionId },
       data: { status: GameSessionStatus.COMPLETED },
     });
 

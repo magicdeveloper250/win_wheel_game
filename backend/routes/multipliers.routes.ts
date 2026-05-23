@@ -81,7 +81,7 @@ router.delete(
 router.patch("/multipliers/:id", authenticate, async(req, res)=>{
      const {  label, value, color } = req.body;
 const id = req.params.id as string;
-    const result = await updateMultiplier(id,{  label, value , color});
+    const result = await updateMultiplier(id,{  label, value , color });
 
     if ("error" in result) {
       if (result.error.includes("already exists")) {

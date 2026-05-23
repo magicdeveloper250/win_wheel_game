@@ -25,6 +25,7 @@ export function buildRingContainer(
   innerR: number,
   outerR: number,
   fontSize: number,
+    showLabels = true,
 ): Container {
   const count = segments.length;
   const angleStep = (Math.PI * 2) / count;
@@ -62,7 +63,8 @@ export function buildRingContainer(
       fontWeight: "bold",
       align: "center",
     });
-    const lbl = new Text({ text: seg.label, style });
+    if(showLabels){
+      const lbl = new Text({ text: seg.label, style });
     lbl.resolution = 2;
     lbl.roundPixels = true;
     lbl.anchor.set(0.5, 0.5);
@@ -70,9 +72,15 @@ export function buildRingContainer(
     lbl.y = ly;
 
     const isLeftHalf = Math.cos(midA) < 0;
-    lbl.rotation = isLeftHalf ? midA - Math.PI / 2 : midA + Math.PI / 2;
+    const isNumber = !isNaN(Number(seg.label));
+    if (isNumber) {
+      lbl.rotation = isLeftHalf ? midA + Math.PI / 2 : midA + Math.PI / 2;
+    } else {
+        lbl.rotation = midA + Math.PI / 2;
+    }
     lbl.filters = [new OutlineFilter(2, 0x000000, 1)];
     ring.addChild(lbl);
+    }
   });
 
   return ring;

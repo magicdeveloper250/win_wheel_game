@@ -6,38 +6,16 @@ import { emitGameEvent, GameEventType } from "../ws/gameEvents";
 import { calculateSpinAnimation } from "../services/spinAnimation";
 import { randomInt } from "crypto";
 
-// ---------------------------------------------------------------------------
-// Cryptographically secure helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Returns a cryptographically secure random integer in [min, max).
- * Backed by the OS CSPRNG via Node's built-in `crypto.randomInt`.
- *
- * House edge is achieved entirely through the winMultiplier configured
- * per session — NOT by manipulating which number is drawn.
- *
- * Example: 10 numbers, winMultiplier = 8x
- *   True odds  = 10x  →  house keeps (10 - 8) / 10 = 20% of every bet pool.
- *   Players get genuinely fair draws; the math does the rest.
- */
 const secureRandInt = (min: number, max: number): number => {
   if (min >= max)
     throw new RangeError(`secureRandInt: min (${min}) must be < max (${max})`);
-  return randomInt(min, max); // inclusive-min, exclusive-max
+  return randomInt(min, max);
 };
 
-/**
- * Picks a cryptographically secure random element from a non-empty array.
- */
 const securePickRandom = <T>(arr: T[]): T => {
   if (!arr.length) throw new Error("securePickRandom: array must not be empty");
   return arr[secureRandInt(0, arr.length)];
 };
-
-// ---------------------------------------------------------------------------
-// BetSession lifecycle
-// ---------------------------------------------------------------------------
 
 export const startBetSession = async (params: { sessionId: string }) => {
   try {
@@ -88,13 +66,8 @@ export const cancelBetSession = async (params: { betSessionId: string }) => {
   }
 };
 
-// ---------------------------------------------------------------------------
-// Session rotation
-// ---------------------------------------------------------------------------
-
 export const getNextSession = async () => {
   const { active, nextPreview } = await prisma.$transaction(async (tx) => {
-    // Cancel any lingering active bet sessions
     await tx.betSession.updateMany({
       where: { status: GameSessionStatus.ACTIVE },
       data: { status: GameSessionStatus.CANCELLED, endTime: new Date() },
@@ -121,7 +94,6 @@ export const getNextSession = async () => {
       include: { multiplier: true },
     });
 
-    // No upcoming sessions — recycle completed ones
     if (!next) {
       await tx.gameSession.updateMany({
         where: {
@@ -183,11 +155,7 @@ export const getNextSession = async () => {
   return { ...active, nextSessionPreview: nextPreview ?? null };
 };
 
-// ---------------------------------------------------------------------------
-// Spin — pure crypto-random draw, house edge via multiplier
-// ---------------------------------------------------------------------------
-
-export const spin = async ( ) => {
+export const spin = async () => {
   const activeBetSession = await prisma.betSession.findFirst({
     where: { status: GameSessionStatus.ACTIVE },
     include: {
@@ -203,22 +171,18 @@ export const spin = async ( ) => {
   const activeGameSession = activeBetSession.session;
   const winMultiplier = activeGameSession.multiplier.winMultiplier;
 
-  // -------------------------------------------------------------------------
-  // Fetch all valid target numbers
-  // -------------------------------------------------------------------------
-
   const allTargetNumbers = await prisma.gameTargetNumber.findMany({
     select: { targetNumber: true },
     orderBy: { targetNumber: "asc" },
   });
-  // the win multiplierrs must must not greater than session multiplier
+
   const allMultipliers = await prisma.gameWinMultiplier.findMany({
- 
     orderBy: { winMultiplier: "asc" },
   });
 
-  // filter multipliers <= gamewin multipler
-  const filteredMultiplier= allMultipliers.filter((m)=>m.winMultiplier<=winMultiplier)
+  const filteredMultiplier = allMultipliers.filter(
+    (m) => m.winMultiplier <= winMultiplier,
+  );
 
   if (!allTargetNumbers.length) {
     throw { error: "No target numbers configured." };
@@ -226,64 +190,86 @@ export const spin = async ( ) => {
 
   const allNumbers = allTargetNumbers.map((n) => n.targetNumber);
 
-  // -------------------------------------------------------------------------
-  // Decide winning number
-  //
-  // Operator override    → use params.winNumber (manual control / testing)
-  // Normal spin          → pure cryptographic random from the number pool
-  //
-  // House edge is entirely encoded in winMultiplier:
-  //   edge = 1 - winMultiplier / totalNumbers
-  //
-  // Example: 10 numbers, multiplier 8x  →  20% house edge per round.
-  // No outcome manipulation is needed or performed.
-  // -------------------------------------------------------------------------
+  const decidedWinNumber: number = securePickRandom(allNumbers);
+  const decidedWinMultiplier = securePickRandom(filteredMultiplier);
 
-  const decidedWinNumber: number =  securePickRandom(allNumbers);
-  const decidedWinMultiplier= securePickRandom(filteredMultiplier);
-  console.log(decidedWinMultiplier)
-
-  // -------------------------------------------------------------------------
-  // Calculate spin animation before the transaction (non-blocking)
-  // -------------------------------------------------------------------------
-
-  const animation = await calculateSpinAnimation(decidedWinNumber);
-
-  // -------------------------------------------------------------------------
-  // Atomically settle bets and close sessions
-  // -------------------------------------------------------------------------
-
+  // Settle bets atomically first
   const result = await prisma.$transaction(async (tx) => {
     const gameResult = await tx.gameResult.create({
       data: {
         sessionId: activeBetSession.id,
         winNumber: decidedWinNumber,
-        winMultiplier: decidedWinMultiplier.winMultiplier,
+        winMultiplier: decidedWinMultiplier.multiplierLetter,
       },
     });
 
-    // Pay out all winning bets
     for (const bet of activeBetSession.gameBets) {
-      if (bet.targetNumber === decidedWinNumber) {
-        const payout = bet.amount.mul(winMultiplier);
+      const isNumberBet = !isNaN(Number(bet.targetNumber));
 
-        await tx.userAccount.update({
-          where: { userId: bet.userId },
-          data: { balance: { increment: payout } },
-        });
+      if (isNumberBet) {
+        const bettedNumber = Number(bet.targetNumber);
+        if (bettedNumber === decidedWinNumber) {
+          const odd = await tx.gameTargetNumber.findFirst({
+            where: { targetNumber: bettedNumber },
+          });
+          if (!odd) continue;
+          const payout = bet.amount.mul(odd.multiplierNumber);
 
-        await tx.transaction.create({
-          data: {
-            userId: bet.userId,
-            amount: payout,
-            type: "WIN_PAYOUT",
-            tax: 0,
-          },
-        });
+          if (bet.userId) {
+            await tx.userAccount.update({
+              where: { userId: bet.userId },
+              data: { balance: { increment: payout } },
+            });
+          }else if(bet.ticketId){
+             await tx.ticket.update({
+              where: { id: bet.ticketId },
+              data: { won:   true },
+            });
+
+          }
+
+          await tx.transaction.create({
+            data: {
+              userId: bet.userId,
+              amount: payout,
+              type: "WIN_PAYOUT",
+              tax: 0,
+            },
+          });
+        }
+      } else {
+        if (bet.targetNumber === decidedWinMultiplier.multiplierLetter) {
+          const odd = await tx.gameWinMultiplier.findFirst({
+            where: { multiplierLetter: bet.targetNumber },
+          });
+          if (!odd) continue;
+          const payout = bet.amount.mul(odd.winMultiplier);
+
+          if (bet.userId) {
+            await tx.userAccount.update({
+              where: { userId: bet.userId },
+              data: { balance: { increment: payout } },
+            });
+          }else if(bet.ticketId){
+             await tx.ticket.update({
+              where: { id: bet.ticketId },
+              data: { won:   true },
+            });
+
+          }
+
+          await tx.transaction.create({
+            data: {
+              userId: bet.userId,
+              amount: payout,
+              type: "WIN_PAYOUT",
+              tax: 0,
+            },
+          });
+        }
       }
     }
 
-    // Close the BetSession and attach the result
     await tx.betSession.update({
       where: { id: activeBetSession.id },
       data: {
@@ -293,7 +279,6 @@ export const spin = async ( ) => {
       },
     });
 
-    // Close the parent GameSession
     await tx.gameSession.update({
       where: { id: activeGameSession.id },
       data: { status: GameSessionStatus.COMPLETED },
@@ -301,10 +286,6 @@ export const spin = async ( ) => {
 
     return gameResult;
   });
-
-  // -------------------------------------------------------------------------
-  // Recycle completed GameSessions when the upcoming pool runs dry
-  // -------------------------------------------------------------------------
 
   const upcomingCount = await prisma.gameSession.count({
     where: { status: GameSessionStatus.UPCOMING },
@@ -320,16 +301,14 @@ export const spin = async ( ) => {
     });
   }
 
-  // Peek at next session for broadcast — do NOT activate it here
   const nextSession = await prisma.gameSession.findFirst({
     where: { status: GameSessionStatus.UPCOMING },
     orderBy: { sessionNumber: "asc" },
     include: { multiplier: true },
   });
 
-  // -------------------------------------------------------------------------
-  // Broadcast result
-  // -------------------------------------------------------------------------
+  // Wait for the full animation to finish before broadcasting the result
+  const animation = await calculateSpinAnimation(decidedWinNumber);
 
   const payload = {
     completedSession: {
@@ -337,7 +316,7 @@ export const spin = async ( ) => {
       sessionNumber: activeGameSession.sessionNumber,
     },
     winNumber: decidedWinNumber,
-    winMultiplier:decidedWinMultiplier.multiplierLetter,
+    winMultiplier: decidedWinMultiplier.multiplierLetter,
     animation,
     result,
     nextSession: nextSession

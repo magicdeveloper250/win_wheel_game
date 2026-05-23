@@ -36,7 +36,7 @@ export class GameStatusContext {
   private listeners: StatusListener[] = [];
 
   // ── Called by WS event: session_opened ───────────────────────────────────
-  onSessionOpened(sessionNumber: number, bettingWindowMs: number): void {
+  onSessionOpened(sessionNumber: number, bettingWindowMs: number ): void {
     this.status.phase = "betting";
     this.status.currentGameId = sessionNumber;
     this.status.nextGameId = sessionNumber + 1;
@@ -66,14 +66,18 @@ export class GameStatusContext {
     this.status.countdown = 0;
     this.notify();
   }
+  onRoundChange(round:number): void {
+    this.status.roundsPlayed = round;
+    this.notify();
+  }
 
   // ── Called when wheel animation finishes ─────────────────────────────────
-  onSpinComplete(letter: string, number: number, points: number): void {
-    this.status.lastLetter = letter;
-    this.status.lastNumber = number;
-    this.status.lastPoints = points;
-    this.status.totalScore += points;
-    this.status.roundsPlayed += 1;
+  onSpinComplete( outerSeg: any, midSeg: any): void {
+    this.status.lastLetter = midSeg.label;
+    this.status.lastNumber = outerSeg.value;
+    this.status.lastPoints = 0; // Adjust as needed
+    this.status.totalScore += this.status.lastPoints;
+    
     this.status.phase = "result";
     this.notify();
   }

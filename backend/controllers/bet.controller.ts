@@ -6,15 +6,38 @@ import { GameSessionStatus } from "../generated/prisma/enums";
 export const placeBet = async (params: {
   userId: string;
   sessionId: string;
-  targetNumbers: number[];
+  targetNumbers: string[];
   amount: number;
 }) => {
+  const numbers = params.targetNumbers.filter((n) => !isNaN(Number(n)));
+  const letters = params.targetNumbers.filter((n) => isNaN(Number(n)));
+
   const settings = await prisma.gameFinancialSetting.findFirst({
     orderBy: { createdAt: "desc" },
   });
   if (!settings) throw { error: "Financial settings not configured." };
 
-  const amount = new Decimal(params.amount).mul(params.targetNumbers.length);
+  const numbersOdds = await prisma.gameTargetNumber.findMany({
+    where: { targetNumber: { in: numbers.map((n) => Number(n)) } },
+  });
+  const lettersOdds = await prisma.gameWinMultiplier.findMany({
+    where: { multiplierLetter: { in: letters } },
+  });
+
+  const combinedOdds = [
+    ...numbersOdds.map((n) => ({
+      bettedValue: String(n.targetNumber),
+      multiplier: n.multiplierNumber,
+    })),
+    ...lettersOdds.map((l) => ({
+      bettedValue: String(l.multiplierLetter),
+      multiplier: l.winMultiplier,
+    })),
+  ];
+
+  // ✅ FIX: amount = stake per selection × number of selections
+  const amount = new Decimal(params.amount).mul(combinedOdds.length);
+
   if (amount.lessThan(settings.minBetAmount))
     throw { error: `Minimum bet amount is ${settings.minBetAmount}.` };
   if (amount.greaterThan(settings.maxBetAmount))
@@ -41,46 +64,23 @@ export const placeBet = async (params: {
         throw { error: "Insufficient balance to place this bet." };
       }
 
-      for(const targetNumber of params.targetNumbers) {
-        await tx.gameBet.create({
-          data: {
-            userId: params.userId,
-            sessionId: params.sessionId,
-            targetNumber,
-            amount: new Decimal(params.amount),
-          },
-        });
-      }
-
-       const bet = await tx.gameBet.createMany({
-        data: params.targetNumbers.map((targetNumber) => ({
+      const bet = await tx.gameBet.createMany({
+        data: combinedOdds.map((targetNumber) => ({
           userId: params.userId,
           sessionId: params.sessionId,
-          targetNumber,
+          targetNumber: targetNumber.bettedValue,
+          multiplierNumber: new Decimal(targetNumber.multiplier).toNumber(),
           amount: new Decimal(params.amount),
         })),
       });
 
-       await tx.userAccount.update({
-        where: { userId: params.userId },
-        data: {
-          balance: balance.sub(amount.add(tax)).toNumber(),
-        },
-      });
-      
       await tx.userAccount.update({
         where: { userId: params.userId },
-        data: {
-          balance: balance.sub(amount.add(tax)).toNumber(),
-        },
+        data: { balance: balance.sub(amount.add(tax)).toNumber() },
       });
+
       const transaction = await tx.transaction.create({
-        data: {
-          userId: params.userId,
-          amount,
-          type: "BET",
-          tax,
-        },
+        data: { userId: params.userId, amount, type: "BET", tax },
       });
       await tx.transaction.create({
         data: {
@@ -90,6 +90,7 @@ export const placeBet = async (params: {
           tax: 0,
         },
       });
+
       const updatedBalance = balance.sub(amount.add(tax)).toNumber();
       return { bet, transaction, balance: updatedBalance };
     },
@@ -107,6 +108,131 @@ export const placeBet = async (params: {
   });
 
   return { bet, transaction, balance };
+};
+
+export const placeTicketBet = async (params: {
+  userId: string;
+  sessionId: string;
+  targetNumbers: string[];
+  amount: number;
+  ticket: {
+    name: string;
+    phone?: string;
+  };
+}) => {
+  const numbers = params.targetNumbers.filter((n) => !isNaN(Number(n)));
+  const letters = params.targetNumbers.filter((n) => isNaN(Number(n)));
+
+  const settings = await prisma.gameFinancialSetting.findFirst({
+    orderBy: { createdAt: "desc" },
+  });
+  if (!settings) throw { error: "Financial settings not configured." };
+
+  const numbersOdds = await prisma.gameTargetNumber.findMany({
+    where: { targetNumber: { in: numbers.map((n) => Number(n)) } },
+  });
+  const lettersOdds = await prisma.gameWinMultiplier.findMany({
+    where: { multiplierLetter: { in: letters } },
+  });
+
+  const combinedOdds = [
+    ...numbersOdds.map((n) => ({
+      bettedValue: String(n.targetNumber),
+      multiplier: n.multiplierNumber,
+    })),
+    ...lettersOdds.map((l) => ({
+      bettedValue: String(l.multiplierLetter),
+      multiplier: l.winMultiplier,
+    })),
+  ];
+
+  const amount = new Decimal(params.amount).mul(combinedOdds.length);
+
+  if (amount.lessThan(settings.minBetAmount))
+    throw { error: `Minimum bet amount is ${settings.minBetAmount}.` };
+  if (amount.greaterThan(settings.maxBetAmount))
+    throw { error: `Maximum bet amount is ${settings.maxBetAmount}.` };
+
+  const session = await prisma.betSession.findUnique({
+    where: { id: params.sessionId },
+    include: { session: { include: { multiplier: true } } },
+  });
+  if (!session) throw { error: "Session not found." };
+  if (session.status !== GameSessionStatus.ACTIVE)
+    throw { error: "Session is not accepting bets." };
+
+  const tax = amount.mul(settings.taxPercentage);
+
+  const { bet, transaction, balance, ticket } = await prisma.$transaction(
+    async (tx) => {
+      const ticket = await tx.ticket.create({
+        data: {
+          name: params.ticket.name,
+          phone: params.ticket.phone,
+          userId: params.userId,
+          amount: new Decimal(params.amount),
+        },
+      });
+      const available = await tx.userAccount.findFirst({
+        where: { userId: params.userId },
+        select: { balance: true },
+      });
+      const balance = new Decimal(available?.balance ?? 0);
+
+      await tx.gameBet.createMany({
+        data: combinedOdds.map((targetNumber) => ({
+          ticketId: ticket.id,
+          sessionId: params.sessionId,
+          targetNumber: targetNumber.bettedValue,
+          multiplierNumber: new Decimal(targetNumber.multiplier).toNumber(),
+          amount: new Decimal(params.amount),
+        })),
+      });
+
+      const bet = await tx.gameBet.findMany({
+        where: { ticketId: ticket.id },
+      });
+      await tx.userAccount.update({
+        where: { userId: params.userId },
+        data: { balance: balance.add(amount.add(tax)).toNumber() },
+      });
+
+      const transaction = await tx.transaction.create({
+        data: {
+          userId: params.userId,
+          amount,
+          type: "TICKET",
+          tax,
+          ticketId: ticket.id,
+        },
+      });
+      await tx.transaction.create({
+        data: {
+          userId: params.userId,
+          ticketId: ticket.id,
+          amount: tax.negated(),
+          type: "TAX",
+          tax: 0,
+        },
+      });
+
+      const updatedBalance = balance.add(amount.add(tax)).toNumber();
+      return { bet, transaction, balance: updatedBalance, ticket, session };
+    },
+  );
+
+  await emitGameEvent(GameEventType.BET_PLACED, {
+    userId: params.userId,
+    sessionId: session.id,
+    sessionNumber: session.session.sessionNumber,
+    targetNumber: params.targetNumbers,
+    amount: amount.toNumber(),
+    totalBetsInSession: await prisma.gameBet.count({
+      where: { sessionId: session.id },
+    }),
+  });
+
+  return { bet, transaction, balance, ticket, session };
 };
 
 export const getUserBets = async (params: {
@@ -142,11 +268,21 @@ export const getUserBets = async (params: {
   };
 };
 
+export const payTicket = async (params: { ticketId: string }) => {
+  const ticket = await prisma.ticket.update({
+    where: { id: params.ticketId },
+    data: {
+      paid: true,
+    },
+  });
 
-export const getLatestBetResults = async ( ) => {
+  return { ticket };
+};
+
+export const getLatestBetResults = async () => {
   const latestBet = await prisma.gameResult.findMany({
     orderBy: { createdAt: "desc" },
-    take:15
+    take: 15,
   });
   return latestBet;
 };

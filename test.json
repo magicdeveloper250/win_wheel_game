@@ -1,0 +1,37 @@
+{
+  "type": "spin_result",
+  "completedSession": { "id": "842050396322140160", "sessionNumber": 2 },
+  "winNumber": 26,
+  "winMultiplier": "e",
+  "animation": {
+    "startAngle": 0,
+    "totalRotation": 2417.837837837838,
+    "finalAngle": 257.8378378378378,
+    "duration": 5000,
+    "easing": { "x1": 0.25, "y1": 0.1, "x2": 0, "y2": 1 },
+    "winIndex": 26,
+    "totalSlots": 37,
+    "slotAngle": 9.72972972972973
+  },
+  "result": {
+    "id": "842050868995035136",
+    "sessionId": "842050396322140160",
+    "winNumber": 26,
+    "winMultiplier": "e",
+    "createdAt": "2026-05-12T14:49:31.740Z",
+    "updatedAt": "2026-05-12T14:49:31.740Z"
+  },
+  "nextSession": {
+    "id": "836975854163726336",
+    "sessionNumber": 3,
+    "multiplier": {
+      "id": "836958353178628096",
+      "multiplierLetter": "b",
+      "winMultiplier": "6",
+      "color": "0xFFD700",
+      "createdAt": "2026-04-28T13:33:41.370Z",
+      "updatedAt": "2026-05-12T08:06:01.360Z"
+    }
+  },
+  "ts": 1778597371869
+}

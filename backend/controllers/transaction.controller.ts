@@ -1,4 +1,6 @@
+import { loadConfigFromEnv, PaymentSystem } from "../classes/PaymentSystem";
 import { prisma } from "../lib/prisma";
+import { parseRwandaPhone } from "../validation/validatePhone";
 
 export const getTransactions = async (params: {
   page?: number;
@@ -86,50 +88,100 @@ export const createDeposit = async (params: {
   userId: string;
   amount: number;
   provider: "MOMO" | "AIRTEL_MONEY";
+  phoneNumber?:string
 }) => {
+  console.log(params.userId);
+  console.log(params.phoneNumber)
+  console.log( params.provider == "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA")
   if (!Number.isFinite(params.amount) || params.amount <= 0) {
     throw { error: "Amount must be greater than 0." };
   }
 
-  return prisma.$transaction(async (tx) => {
-    // Lock the row with findFirst + update, or create if not exists
-    // First ensure the account exists
-    await tx.userAccount.upsert({
-      where: { userId: params.userId },
-      update: {},                          // no-op if exists
-      create: { userId: params.userId, balance: 0 },
-    });
-
-    // Now safely update — row is guaranteed to exist
-    const updatedAccount = await tx.userAccount.update({
-      where: { userId: params.userId },
-      data: {
-        balance: {
-          increment: params.amount,        // atomic increment, no race condition
-        },
-      },
-      select: { balance: true },
-    });
-
-    if (Number(updatedAccount.balance) > 1_000_000) {
-      throw { error: "Deposit would exceed maximum balance limit of 1,000,000." };
-    }
-
-    const txRecord = await tx.transaction.create({
-      data: {
-        userId: params.userId,
-        amount: params.amount,
-        type: "DEPOSIT",
-        tax: 0,
-      },
-    });
-
-    return {
-      ...txRecord,
-      balance: updatedAccount.balance,
-      meta: { provider: params.provider },
+  if (!Number.isFinite(params.amount) || params.amount > 1_000_000) {
+    throw {
+      error: "Deposit would exceed maximum balance limit of 1,000,000.",
     };
-  });
+  }
+
+  return prisma.$transaction(
+    async (tx) => {
+      const user = await prisma.user.findFirst({
+        where: {
+          id: params.userId,
+        },
+      });
+      if (!user) {
+        throw { error: "The Deposit user not found in the system" };
+      }
+      if (!user.phone) {
+        throw {
+          error: "User phone number is required to proceed the operation",
+        };
+      }
+      let paymentPhone= null;
+      if(params.phoneNumber && params.phoneNumber.length>5){
+        paymentPhone= parseRwandaPhone( params.phoneNumber)
+      }else{
+        paymentPhone= parseRwandaPhone( user.phone)
+
+      }
+      const ps = new PaymentSystem(loadConfigFromEnv());
+      const result = await ps.initiatePayment({
+        email: user.email,
+        name: user.name,
+        phone: parseRwandaPhone(paymentPhone),
+        amount: params.amount,
+        paymentMethod:
+          params.provider == "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
+        servicePaid: "payment",
+      });
+      const realResult: any = result.raw;
+      if ((realResult.status! = "success")) {
+        throw { error: result.message };
+      }
+      const transactionId = realResult.transaction_id;
+      const referenceId = realResult.refid;
+      await tx.userAccount.upsert({
+        where: { userId: params.userId },
+        update: {},
+        create: { userId: params.userId, balance: 0 },
+      });
+
+      const updatedAccount = await tx.userAccount.update({
+        where: { userId: params.userId },
+        data: {
+          balance: {
+            increment: params.amount,
+          },
+        },
+        select: { balance: true },
+      });
+
+      if (Number(updatedAccount.balance) > 1_000_000) {
+        throw {
+          error: "Deposit would exceed maximum balance limit of 1,000,000.",
+        };
+      }
+
+      const txRecord = await tx.transaction.create({
+        data: {
+          userId: params.userId,
+          amount: params.amount,
+          exTransactionId: transactionId,
+          reference_id: referenceId,
+          type: "DEPOSIT",
+          tax: 0,
+        },
+      });
+
+      return {
+        ...txRecord,
+        balance: updatedAccount.balance,
+        meta: { provider: params.provider },
+      };
+    },
+    { timeout: 60_000, maxWait: 60_000 },
+  );
 };
 
 export const createWithdrawal = async (params: {
@@ -145,7 +197,7 @@ export const createWithdrawal = async (params: {
     where: { userId: params.userId },
     select: { balance: true },
   });
-  
+
   const balance = Number(userBalance?.balance ?? 0);
   if (balance < params.amount) {
     throw { error: "Insufficient balance for withdrawal." };
@@ -177,11 +229,10 @@ export const createWithdrawal = async (params: {
   };
 };
 
-
-export const getBalance= async(params:{userId:string})=>{
+export const getBalance = async (params: { userId: string }) => {
   const userBalance = await prisma.userAccount.findUnique({
     where: { userId: params.userId },
     select: { balance: true },
   });
   return Number(userBalance?.balance ?? 0);
-}
+};

@@ -4,8 +4,9 @@
 export interface Segment {
   label: string;
   color?: number;
-  value: number | string;
+  value: string;
   grad?: [number, number];
+  multiplier?:number
 }
 
 

@@ -1,35 +1,29 @@
 import { Request, Response, NextFunction } from "express";
 import { z, ZodSchema } from "zod";
 
-// ---------------------------------------------------------------------------
-// Generic validator factory
-// ---------------------------------------------------------------------------
-
 export const validate =
   (schema: ZodSchema, source: "body" | "query" | "params" = "body") =>
   (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req[source]);
     if (!result.success) {
-      const message = result.error.issues
-        .map((e) => `${e.message}`)
-        .join(", ");
+      const message = result.error.issues.map((e) => `${e.message}`).join(", ");
 
       return res.status(400).json({ error: message });
     }
-    req[source] = result.data;
+
+    if (source === "query" || source === "params") {
+      Object.assign(req[source], result.data);
+    } else {
+      req[source] = result.data;
+    }
+
     next();
   };
-
-// ---------------------------------------------------------------------------
-// Schemas
-// ---------------------------------------------------------------------------
 
 export const createUserSchema = z.object({
   email: z.string().email("Invalid email address."),
   name: z.string().min(2, "Name must be at least 2 characters."),
-  phone: z
-    .string()
-    .regex(/^\+?[0-9]\d{6,14}$/, "Invalid phone number."),
+  phone: z.string().regex(/^\+?[0-9]\d{6,14}$/, "Invalid phone number."),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters.")
@@ -50,6 +44,8 @@ export const updateUserSchema = z
       .regex(/^\+?[0-9]\d{6,14}$/, "Invalid phone number.")
       .optional(),
     email: z.string().email("Invalid email address.").optional(),
+    role: z.string().optional(),
+    isActive: z.boolean(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided.",

@@ -3,10 +3,12 @@ import {
   ChevronRight,
   CurrencyIcon,
   Gamepad2,
+  Key,
   LayoutDashboard,
   LogOut,
   Menu,
   Settings,
+  Users,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,9 +23,11 @@ const menuItems = [
   { name: "Game Sessions", path: "/sessions", icon: Gamepad2 },
   { name: "Financials", path: "/financials", icon: CurrencyIcon },
   { name: "Settings", path: "/settings", icon: Settings },
+  { name: "Users", path: "/users", icon: Users },
+   { name: "Profile", path: "/profile", icon: Users },
+    { name: "Change Password", path: "/change-password", icon: Key },
 ];
 
-// ─── Shared nav content ───────────────────────────────────────────────────────
 function SidebarContent({
   isExpanded,
   onNavigate,
@@ -37,7 +41,6 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Nav */}
       <nav className="flex flex-col gap-1 p-2 flex-1 mt-4">
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -76,7 +79,6 @@ function SidebarContent({
         })}
       </nav>
 
-      {/* Footer */}
       <div className="p-3 border-t border-border shrink-0">
         <div
           className={`flex items-center gap-3 ${
@@ -134,7 +136,6 @@ function SidebarContent({
   );
 }
 
-// ─── Desktop Sidebar ──────────────────────────────────────────────────────────
 function DesktopSidebar() {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -174,7 +175,6 @@ function DesktopSidebar() {
   );
 }
 
-// ─── Mobile Topbar + Sheet ────────────────────────────────────────────────────
 function MobileSidebar() {
   const [open, setOpen] = useState(false);
 
@@ -218,7 +218,6 @@ function MobileSidebar() {
   );
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
 export function Sidebar() {
   return (
     <>

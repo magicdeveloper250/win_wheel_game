@@ -6,7 +6,7 @@ import {
 } from "../controllers/spin.controller";
 import { emitGameEvent, GameEventType } from "../ws/gameEvents";
 
-const BETTING_DURATION_MS = 180_000;
+const BETTING_DURATION_MS = 60_000;
 const COUNTDOWN_TICK_MS = 1_000;
 const ANIMATION_DURATION_MS = 5_000;
 const RESULTS_DISPLAY_MS = 3_000;

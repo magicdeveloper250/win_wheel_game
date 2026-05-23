@@ -1,5 +1,3 @@
-// ─── Enums (const + inferred type pattern — compatible with erasableSyntaxOnly) ──
-
 export const GameSessionStatus = {
   UPCOMING: "UPCOMING",
   ACTIVE: "ACTIVE",
@@ -7,8 +5,8 @@ export const GameSessionStatus = {
   CANCELLED: "CANCELLED",
 } as const;
 
- 
-export type GameSessionStatus = (typeof GameSessionStatus)[keyof typeof GameSessionStatus];
+export type GameSessionStatus =
+  (typeof GameSessionStatus)[keyof typeof GameSessionStatus];
 
 export const TransactionType = {
   DEPOSIT: "DEPOSIT",
@@ -17,31 +15,31 @@ export const TransactionType = {
   WIN: "WIN",
   REFUND: "REFUND",
 } as const;
-export type TransactionType = (typeof TransactionType)[keyof typeof TransactionType];
+export type TransactionType =
+  (typeof TransactionType)[keyof typeof TransactionType];
 
 export const UserRole = {
   ADMIN: "ADMIN",
   USER: "USER",
+  MODERATOR: "MODERATOR",
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
-
-// ─── User ─────────────────────────────────────────────────────────────────────
 
 export interface User {
   id: string;
   name: string;
   email: string;
   phone?: string;
+  balance?: string;
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+  isActive: boolean;
 }
-
-// ─── Game Session ─────────────────────────────────────────────────────────────
 
 export interface GameSession {
   id: string;
-  sessionNumber:number;
+  sessionNumber: number;
   duration: number;
   startedAt: string;
   endedAt: string;
@@ -70,13 +68,12 @@ export interface GameSessionUpdate {
   status?: GameSessionStatus;
 }
 
-// ─── Game Bet ─────────────────────────────────────────────────────────────────
-
 export interface GameBet {
   id: string;
   userId: string;
   user?: User;
-  targetNumber: number;
+  targetNumber: string;
+  multiplierNumber: number;
   amount: number;
   sessionId: string;
   session?: GameSession;
@@ -90,8 +87,6 @@ export interface GameBetCreate {
   amount: number;
   sessionId: string;
 }
-
-// ─── Game Result ──────────────────────────────────────────────────────────────
 
 export interface GameResult {
   id: string;
@@ -108,8 +103,6 @@ export interface GameResultCreate {
   winNumber: number;
   winMultiplier: number;
 }
-
-// ─── Transaction ──────────────────────────────────────────────────────────────
 
 export interface Transaction {
   id: string;
@@ -129,16 +122,12 @@ export interface TransactionCreate {
   tax: number;
 }
 
-// ─── Audit Log ────────────────────────────────────────────────────────────────
-
 export interface AuditLog {
   id: string;
   action: string;
   details: string;
   createdAt: string;
 }
-
-// ─── System Config ────────────────────────────────────────────────────────────
 
 export interface SystemConfig {
   id: string;
@@ -147,8 +136,6 @@ export interface SystemConfig {
   createdAt: string;
   updatedAt: string;
 }
-
-// ─── User Session ─────────────────────────────────────────────────────────────
 
 export interface UserSession {
   id: string;
@@ -159,8 +146,6 @@ export interface UserSession {
   updatedAt: string;
 }
 
-// ─── Password Reset Token ─────────────────────────────────────────────────────
-
 export interface PasswordResetToken {
   id: string;
   userId: string;
@@ -170,8 +155,6 @@ export interface PasswordResetToken {
   createdAt: string;
   updatedAt: string;
 }
-
-// ─── Game Financial Settings ──────────────────────────────────────────────────
 
 export interface GameFinancialSetting {
   id: string;
@@ -190,28 +173,24 @@ export interface GameFinancialSettingUpdate {
   houseEdgePercentage?: number;
 }
 
-// ─── Game Target Number Settings ──────────────────────────────────────────────
-
 export interface GameTargetNumberSetting {
   id: string;
   targetNumber: number;
+  multiplierNumber: number;
   createdAt: string;
-   color: string;
+  color: string;
   updatedAt: string;
 }
-
-// ─── Game Win Multiplier Settings ─────────────────────────────────────────────
 
 export interface GameWinMultiplierSetting {
   id: string;
   multiplierLetter: string;
-   color: string;
+  color: string;
   winMultiplier: number;
+
   createdAt: string;
   updatedAt: string;
 }
-
-// ─── Paginated Response ───────────────────────────────────────────────────────
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -219,8 +198,6 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
 }
-
-// ─── API Error ────────────────────────────────────────────────────────────────
 
 export interface ApiError {
   error: string;
@@ -235,8 +212,6 @@ export interface NotificationData {
   read?: boolean;
   [key: string]: unknown;
 }
-
-// ─── WebSocket Game Events ─────────────────────────────────────────────────
 
 export interface WsSessionOpened {
   type: "session_opened";
@@ -268,11 +243,34 @@ export interface WsSpinResult {
   sessionId: string;
   sessionNumber: number;
   winNumber: number;
-   winMultiplier: string;
+  winMultiplier: string;
   animation: { duration: number };
   completedSession: GameSession;
   nextSession: GameSession | null;
   ts: number;
+  result: {
+    id: string;
+    winNumber: number;
+    winMultiplier: string;
+    sessionId: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+export interface Ticket {
+  id: String;
+  userId: String;
+  name: String;
+  phone?: string;
+  amount: number;
+  paid: Boolean;
+  won: Boolean;
+  createdAt: string;
+  updatedAt?: string;
+  gameBets: GameBet[];
+  transactions: Transaction;
+  user: User;
 }
 
 export interface WsRoundEnded {
@@ -303,7 +301,6 @@ export type LiveGameWsEvent =
 
 export type LiveGameEventType = LiveGameWsEvent["type"];
 
-// Legacy application-flow types used by useApplicatinFlow hook
 export type ApplicationStep = 0 | 1 | 2 | 3;
 
 export interface ApplicationAnswer {

@@ -19,7 +19,7 @@ export const getAllTargetNumbers = async (params?: {
 
     const [targetNumbers, total] = await prisma.$transaction([
       prisma.gameTargetNumber.findMany({
-        orderBy: { createdAt: "desc" },
+        orderBy: { targetNumber: "asc" },
       }),
       prisma.gameTargetNumber.count(),
     ]);
@@ -42,6 +42,7 @@ export const getAllTargetNumbers = async (params?: {
 
 export const createTargetNumber = async (params: {
   number: number;
+  multiplierNumber?: number;
   color:string
   
 }) => {
@@ -58,6 +59,7 @@ export const createTargetNumber = async (params: {
     const targetNumber = await prisma.gameTargetNumber.create({
       data: {
          targetNumber:params.number,
+         multiplierNumber: params.multiplierNumber ?? 0,
          color:params.color
       },
     });
@@ -73,6 +75,7 @@ export const updateTarget= async (
   id: string,
   params:  {
     number:number;
+    multiplierNumber: number;
     color: string;
   },
 ) => {
@@ -86,11 +89,12 @@ export const updateTarget= async (
 
     const targetNumber = await prisma.gameTargetNumber.update({
       where: { id },
-      data: { targetNumber: params.number, color:params.color },
+      data: { targetNumber: Number(params.number), color:params.color, multiplierNumber: params.multiplierNumber },
     });
 
     return targetNumber;
-  } catch {
+  } catch(error) {
+    console.log(error)
     return { error: "An error occurred while updating the targetNumber." };
   }
 };

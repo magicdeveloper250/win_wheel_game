@@ -13,14 +13,20 @@ import {
   ArrowDownRight,
   Clock,
   User,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import useUserAxios from "@/hooks/useUserAxios";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface FinancialSettings {
   id: string;
   minBetAmount: number;
@@ -52,20 +58,18 @@ interface TransactionPage {
     totalPayouts: number;
   };
 }
+
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: typeof ArrowUpRight }> = {
-  BET:        { label: "Bet",        color: "text-yellow-400", icon: ArrowDownRight },
-  WIN_PAYOUT: { label: "Win",        color: "text-emerald-400", icon: ArrowUpRight },
-  DEPOSIT:    { label: "Deposit",    color: "text-sky-400",    icon: ArrowUpRight },
-  WITHDRAWAL: { label: "Withdrawal", color: "text-rose-400",   icon: ArrowDownRight },
+  BET:        { label: "Bet",        color: "text-yellow-400",  icon: ArrowDownRight },
+  WIN_PAYOUT: { label: "Win",        color: "text-emerald-400", icon: ArrowUpRight   },
+  DEPOSIT:    { label: "Deposit",    color: "text-sky-400",     icon: ArrowUpRight   },
+  WITHDRAWAL: { label: "Withdrawal", color: "text-rose-400",    icon: ArrowDownRight },
 };
+
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "RWF",
-  }).format(n);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "RWF" }).format(n);
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({
   icon: Icon,
   label,
@@ -80,27 +84,26 @@ function StatCard({
   accent: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3 sm:p-5">
       <div className={`absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-10 ${accent}`} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-muted-foreground truncate">
+          <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-widest text-muted-foreground truncate">
             {label}
           </p>
-          <p className="mt-1.5 text-lg sm:text-2xl font-bold text-foreground leading-tight break-all">
+          <p className="mt-1 text-base sm:text-2xl font-bold text-foreground leading-tight break-all">
             {value}
           </p>
           {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
         </div>
         <div className={`rounded-lg p-2 shrink-0 ${accent} bg-opacity-10`}>
-          <Icon size={16} className={accent.replace("bg-", "text-")} />
+          <Icon size={14} className={accent.replace("bg-", "text-")} />
         </div>
       </div>
     </div>
   );
 }
 
-// ── Settings form ─────────────────────────────────────────────────────────────
 function SettingsForm({
   settings,
   onSaved,
@@ -111,10 +114,10 @@ function SettingsForm({
   const axios = useUserAxios();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    minBetAmount:       settings?.minBetAmount       ?? 0,
-    maxBetAmount:       settings?.maxBetAmount       ?? 0,
-    taxPercentage:      settings?.taxPercentage      ?? 0,
-    houseEdgePercentage:settings?.houseEdgePercentage ?? 0,
+    minBetAmount:        settings?.minBetAmount        ?? 0,
+    maxBetAmount:        settings?.maxBetAmount        ?? 0,
+    taxPercentage:       settings?.taxPercentage       ?? 0,
+    houseEdgePercentage: settings?.houseEdgePercentage ?? 0,
   });
 
   useEffect(() => {
@@ -150,7 +153,7 @@ function SettingsForm({
             onChange={(e) =>
               setForm((p) => ({ ...p, [key]: Number(e.target.value) }))
             }
-            className="bg-background pr-12 text-foreground border-border  "
+            className="bg-background pr-12 text-foreground border-border"
           />
           {suffix && (
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none">
@@ -197,12 +200,11 @@ function SettingsForm({
         </div>
       </div>
 
-      {/* Single column on mobile, 2 cols on sm+ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {field("minBetAmount",        "Min Bet Amount",  Wallet,    "RWF")}
-        {field("maxBetAmount",        "Max Bet Amount",  TrendingUp,"RWF")}
-        {field("taxPercentage",       "Tax Percentage",  Percent,   "%"  )}
-        {field("houseEdgePercentage", "House Edge",      Shield,    "%"  )}
+        {field("minBetAmount",        "Min Bet Amount", Wallet,    "RWF")}
+        {field("maxBetAmount",        "Max Bet Amount", TrendingUp,"RWF")}
+        {field("taxPercentage",       "Tax Percentage", Percent,   "%"  )}
+        {field("houseEdgePercentage", "House Edge",     Shield,    "%"  )}
       </div>
 
       <div className="mt-5 flex justify-end">
@@ -215,45 +217,127 @@ function SettingsForm({
   );
 }
 
-// ── Transaction row ───────────────────────────────────────────────────────────
-function TxRow({ tx }: { tx: Transaction }) {
+function TxDetailDialog({
+  tx,
+  open,
+  onOpenChange,
+}: {
+  tx: Transaction | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  if (!tx) return null;
   const cfg = TYPE_CONFIG[tx.type] ?? {
     label: tx.type,
     color: "text-muted-foreground",
     icon: ArrowUpRight,
   };
   const Icon = cfg.icon;
+  const isDebit = tx.type === "BET" || tx.type === "WITHDRAWAL";
 
   return (
-    <div className="flex items-start sm:items-center justify-between gap-3 border-b border-border py-3 last:border-0">
-      {/* Left: icon + user info */}
-      <div className="flex items-start sm:items-center gap-3 min-w-0">
-        <div className="rounded-full p-1.5 bg-muted shrink-0 mt-0.5 sm:mt-0">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm mx-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Receipt size={16} className="text-muted-foreground" />
+            Transaction Detail
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 pt-1">
+          <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-full bg-muted p-2">
+                <Icon size={14} className={cfg.color} />
+              </div>
+              <span className={`text-xs font-bold uppercase tracking-widest ${cfg.color}`}>
+                {cfg.label}
+              </span>
+            </div>
+            <p className={`text-lg font-bold ${cfg.color}`}>
+              {isDebit ? "−" : "+"}{fmt(tx.amount)}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm px-1">
+            <span className="text-muted-foreground font-medium">User</span>
+            <span className="font-semibold text-foreground text-right truncate">{tx.user.name}</span>
+
+            <span className="text-muted-foreground font-medium">Email</span>
+            <span className="text-right truncate text-foreground">{tx.user.email}</span>
+
+            <span className="text-muted-foreground font-medium">Tax</span>
+            <span className="text-right text-foreground">{fmt(tx.tax)}</span>
+
+            <span className="text-muted-foreground font-medium">Date</span>
+            <span className="text-right text-foreground">
+              {new Date(tx.createdAt).toLocaleDateString("en-US", {
+                year: "numeric", month: "short", day: "numeric",
+              })}
+            </span>
+
+            <span className="text-muted-foreground font-medium">Time</span>
+            <span className="text-right text-foreground">
+              {new Date(tx.createdAt).toLocaleTimeString()}
+            </span>
+
+            <span className="text-muted-foreground font-medium">ID</span>
+            <span className="text-right text-foreground font-mono text-xs truncate">{tx.id}</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TxRow({
+  tx,
+  onTap,
+}: {
+  tx: Transaction;
+  onTap?: () => void;
+}) {
+  const cfg = TYPE_CONFIG[tx.type] ?? {
+    label: tx.type,
+    color: "text-muted-foreground",
+    icon: ArrowUpRight,
+  };
+  const Icon = cfg.icon;
+  const isDebit = tx.type === "BET" || tx.type === "WITHDRAWAL";
+
+  return (
+    <div
+      onClick={onTap}
+      className="flex items-start justify-between gap-3 border-b border-border py-3 last:border-0 sm:cursor-default cursor-pointer sm:active:bg-transparent active:bg-muted/40 transition-colors"
+    >
+      <div className="flex items-start gap-3 min-w-0">
+        <div className="rounded-full p-1.5 bg-muted shrink-0 mt-0.5">
           <Icon size={12} className={cfg.color} />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{tx.user.name}</p>
-          {/* Email hidden on very small screens, shown on sm+ */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-            <span className="hidden sm:flex items-center gap-1">
-              <User size={10} />
-              {tx.user.email}
+            <span className="hidden sm:flex items-center gap-1 truncate max-w-40">
+              <User size={10} className="shrink-0" />
+              <span className="truncate">{tx.user.email}</span>
             </span>
             <span className="flex items-center gap-1">
               <Clock size={10} />
-              <span className="hidden sm:inline">{new Date(tx.createdAt).toLocaleString()}</span>
-              {/* Compact date on mobile */}
-              <span className="sm:hidden">{new Date(tx.createdAt).toLocaleDateString()}</span>
+              <span className="hidden sm:inline">
+                {new Date(tx.createdAt).toLocaleString()}
+              </span>
+              <span className="sm:hidden">
+                {new Date(tx.createdAt).toLocaleDateString()}
+              </span>
             </span>
           </div>
         </div>
       </div>
 
-      {/* Right: amount + type badge — always visible, never clips */}
-      <div className="text-right shrink-0">
-        <p className={`text-sm font-bold   ${cfg.color}`}>
-          {tx.type === "BET" || tx.type === "WITHDRAWAL" ? "−" : "+"}
-          {fmt(tx.amount)}
+      <div className="text-right shrink-0 max-w-[40%]">
+        <p className={`text-sm font-bold leading-tight break-all ${cfg.color}`}>
+          {isDebit ? "−" : "+"}{fmt(tx.amount)}
         </p>
         <span className={`text-[10px] font-bold uppercase tracking-widest ${cfg.color}`}>
           {cfg.label}
@@ -285,15 +369,16 @@ function TxSkeleton() {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function FinancialPage() {
   const axios = useUserAxios();
-  const [settings, setSettings]           = useState<FinancialSettings | null>(null);
+  const [settings, setSettings]               = useState<FinancialSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
-  const [txPage, setTxPage]               = useState<TransactionPage | null>(null);
-  const [txLoading, setTxLoading]         = useState(true);
-  const [page, setPage]                   = useState(1);
-  const [typeFilter, setTypeFilter]       = useState<string>("ALL");
+  const [txPage, setTxPage]                   = useState<TransactionPage | null>(null);
+  const [txLoading, setTxLoading]             = useState(true);
+  const [page, setPage]                       = useState(1);
+  const [typeFilter, setTypeFilter]           = useState<string>("ALL");
+  const [selectedTx, setSelectedTx]           = useState<Transaction | null>(null);
+  const [txDialogOpen, setTxDialogOpen]       = useState(false);
 
   const loadSettings = async () => {
     setSettingsLoading(true);
@@ -322,14 +407,24 @@ export default function FinancialPage() {
   };
 
   useEffect(() => { loadSettings(); }, []);
-  useEffect(() => { loadTx(); },      [page, typeFilter]);
+  useEffect(() => { loadTx(); }, [page, typeFilter]);
+
+  const handleTxTap = (tx: Transaction) => {
+    setSelectedTx(tx);
+    setTxDialogOpen(true);
+  };
 
   const FILTERS = ["ALL", "BET", "WIN_PAYOUT", "DEPOSIT", "WITHDRAWAL"];
 
   return (
     <div className="flex flex-col gap-5 p-3 sm:p-4 md:p-6 bg-background min-h-full">
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <TxDetailDialog
+        tx={selectedTx}
+        open={txDialogOpen}
+        onOpenChange={setTxDialogOpen}
+      />
+
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-bold text-foreground tracking-tight">
@@ -350,35 +445,13 @@ export default function FinancialPage() {
         </Button>
       </div>
 
-      {/* ── Stat grid: 2-col on mobile, 4-col on sm+ ─────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-        <StatCard
-          icon={Wallet}
-          label="Total Bets"
-          value={fmt(txPage?.totals.totalBets ?? 0)}
-          accent="bg-foreground-500"
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Payouts"
-          value={fmt(txPage?.totals.totalPayouts ?? 0)}
-          accent="bg-emerald-500"
-        />
-        <StatCard
-          icon={Shield}
-          label="Min Bet"
-          value={settingsLoading ? "…" : fmt(settings?.minBetAmount ?? 0)}
-          accent="bg-sky-500"
-        />
-        <StatCard
-          icon={Percent}
-          label="Tax Rate"
-          value={settingsLoading ? "…" : `${settings?.taxPercentage ?? 0}%`}
-          accent="bg-violet-500"
-        />
+        <StatCard icon={Wallet}    label="Total Bets" value={fmt(txPage?.totals.totalBets ?? 0)}      accent="bg-foreground-500" />
+        <StatCard icon={TrendingUp} label="Payouts"   value={fmt(txPage?.totals.totalPayouts ?? 0)}   accent="bg-emerald-500"    />
+        <StatCard icon={Shield}    label="Min Bet"    value={settingsLoading ? "…" : fmt(settings?.minBetAmount ?? 0)} accent="bg-sky-500" />
+        <StatCard icon={Percent}   label="Tax Rate"   value={settingsLoading ? "…" : `${settings?.taxPercentage ?? 0}%`} accent="bg-violet-500" />
       </div>
 
-      {/* ── Settings form ──────────────────────────────────────────────────── */}
       {settingsLoading ? (
         <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
           <div className="flex flex-col gap-4">
@@ -397,15 +470,16 @@ export default function FinancialPage() {
         <SettingsForm settings={settings} onSaved={loadSettings} />
       )}
 
-      {/* ── Transaction history ────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-card">
-
-        {/* Toolbar: stacks on mobile, row on sm+ */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border px-4 sm:px-5 py-3 sm:py-4">
-          <h2 className="font-bold text-foreground text-sm shrink-0">
-            Transaction History
-          </h2>
-          {/* Filter pills — horizontally scrollable on small screens */}
+          <div className="flex items-center justify-between sm:block">
+            <h2 className="font-bold text-foreground text-sm shrink-0">
+              Transaction History
+            </h2>
+            <p className="text-xs text-muted-foreground sm:hidden">
+              Tap a row for details
+            </p>
+          </div>
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-1 px-1">
             {FILTERS.map((f) => (
               <button
@@ -423,7 +497,6 @@ export default function FinancialPage() {
           </div>
         </div>
 
-        {/* Rows */}
         <div className="px-4 sm:px-5">
           {txLoading ? (
             <TxSkeleton />
@@ -432,21 +505,26 @@ export default function FinancialPage() {
               No transactions found.
             </p>
           ) : (
-            txPage.data.map((tx) => <TxRow key={tx.id} tx={tx} />)
+            txPage.data.map((tx) => (
+              <TxRow
+                key={tx.id}
+                tx={tx}
+                onTap={() => handleTxTap(tx)}
+              />
+            ))
           )}
         </div>
 
-        {/* Pagination */}
         {txPage && txPage.pagination.totalPages > 1 && (
           <div className="flex flex-col xs:flex-row items-center justify-between gap-2 border-t border-border px-4 sm:px-5 py-3">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground text-center xs:text-left">
               Page {txPage.pagination.page} of {txPage.pagination.totalPages} · {txPage.pagination.total} total
             </span>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 w-full xs:w-auto">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs px-3"
+                className="h-7 text-xs px-3 flex-1 xs:flex-none"
                 disabled={page <= 1 || txLoading}
                 onClick={() => setPage((p) => p - 1)}
               >
@@ -455,7 +533,7 @@ export default function FinancialPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs px-3"
+                className="h-7 text-xs px-3 flex-1 xs:flex-none"
                 disabled={page >= txPage.pagination.totalPages || txLoading}
                 onClick={() => setPage((p) => p + 1)}
               >

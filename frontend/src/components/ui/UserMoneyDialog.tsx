@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,17 +30,26 @@ interface UserMoneyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   action: MoneyAction;
+  userId?: string|null;
+  phoneNumber?: String;
 }
 
-export default function UserMoneyDialog({ open, onOpenChange, action }: UserMoneyDialogProps) {
+export default function UserMoneyDialog({
+  open,
+  onOpenChange,
+  action,
+  userId,
+  phoneNumber
+}: UserMoneyDialogProps) {
   const axios = useUserAxios();
   const [provider, setProvider] = useState<Provider>("MOMO");
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const{session, setSession}= useSession()
+  const { session, setSession } = useSession();
 
   const title = action === "deposit" ? "Deposit Funds" : "Withdraw Funds";
-  const endpoint = action === "deposit" ? "/transactions/deposit" : "/transactions/withdraw";
+  const endpoint =
+    action === "deposit" ? "/transactions/deposit" : "/transactions/withdraw";
   const cta = action === "deposit" ? "Deposit" : "Withdraw";
 
   const parsedAmount = useMemo(() => Number(amount), [amount]);
@@ -61,14 +70,20 @@ export default function UserMoneyDialog({ open, onOpenChange, action }: UserMone
       optimistic: true,
     };
 
-    window.dispatchEvent(new CustomEvent("wallet:tx-created", { detail: optimistic }));
+    window.dispatchEvent(
+      new CustomEvent("wallet:tx-created", { detail: optimistic }),
+    );
 
     try {
       const res = await axios.post(endpoint, {
+        userId: userId ? userId : session?.id,
         amount: parsedAmount,
         provider,
+        phoneNumber:phoneNumber?phoneNumber:null
       });
-      window.dispatchEvent(new CustomEvent("wallet:tx-confirmed", { detail: res.data }));
+      window.dispatchEvent(
+        new CustomEvent("wallet:tx-confirmed", { detail: res.data }),
+      );
       toast.success(`${cta} request successful.`);
       setAmount("");
       setSession({
@@ -77,31 +92,45 @@ export default function UserMoneyDialog({ open, onOpenChange, action }: UserMone
       } as any);
       onOpenChange(false);
     } catch (err) {
-      window.dispatchEvent(new CustomEvent("wallet:tx-reverted", { detail: optimistic.id }));
-      toast.error(isAxiosError(err) ? (err.response?.data?.error ?? err.message) : `${cta} failed.`);
+      window.dispatchEvent(
+        new CustomEvent("wallet:tx-reverted", { detail: optimistic.id }),
+      );
+      toast.error(
+        isAxiosError(err)
+          ? (err.response?.data?.error ?? err.message)
+          : `${cta} failed.`,
+      );
     } finally {
       setSubmitting(false);
     }
   };
+useEffect(()=>{
+  if(!open){
+    setAmount("")
+  }
 
+},[open])
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Choose a provider and amount. This request is processed instantly in demo mode.
+            Choose a provider and amount.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label>Provider</Label>
-            <Select value={provider} onValueChange={(v) => setProvider(v as Provider)} >
+            <Select
+              value={provider}
+              onValueChange={(v) => setProvider(v as Provider)}
+            >
               <SelectTrigger className="w-full p-6">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
-              <SelectContent  >
+              <SelectContent>
                 <SelectItem value="MOMO">MoMo</SelectItem>
                 <SelectItem value="AIRTEL_MONEY">Airtel Money</SelectItem>
               </SelectContent>
@@ -123,7 +152,11 @@ export default function UserMoneyDialog({ open, onOpenChange, action }: UserMone
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
             Cancel
           </Button>
           <Button onClick={submit} disabled={submitting}>

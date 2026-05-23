@@ -22,10 +22,15 @@ import UserWithdrawPage from "./pages/UserWithdrawPage";
 import UserChangePasswordPage from "./pages/UserChangePasswordPage";
 import useSession from "@/hooks/useSession";
 import { UserRole } from "./lib/types";
+import UsersPage from "./pages/UsersPage";
 
 const RootRedirect = () => {
   const { session } = useSession();
-  return session?.role===UserRole.ADMIN ? <Navigate to="/dashboard" /> : <Navigate to="/app" />;
+  return session?.role === UserRole.ADMIN ? (
+    <Navigate to="/dashboard" />
+  ) : (
+    <Navigate to="/app" />
+  );
 };
 
 const App = () => {
@@ -45,9 +50,15 @@ const App = () => {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/sessions" element={<SessionsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/users" element={<UsersPage />} />
               <Route path="financials" element={<FinancialPage />} />
+              <Route path="profile" element={<UserProfilePage />} />
+              <Route
+                path="change-password"
+                element={<UserChangePasswordPage />}
+              />
             </Route>
-            <Route  element={<NotificationLayout />}>
+            <Route element={<NotificationLayout />}>
               <Route path="/app" element={<UserAppLayout />}>
                 <Route index element={<UserDashboardPage />} />
                 <Route path="game" element={<GamePage />} />

@@ -193,15 +193,27 @@ export const reorderSessions = async (
 
 export const getActiveSession = async (userId: string) => {
   try {
-    let active = await prisma.betSession.findFirst({
+    const active = await prisma.betSession.findFirst({
       where: { status: GameSessionStatus.ACTIVE },
       include: { session: { include: { multiplier: true } } },
     });
-    let alreadyBeenBettedOn = await prisma.gameBet.findFirst({
-      where: { sessionId: active?.id, userId },
-    });
+    if (!active) return null;
 
-    return { ...active, betted: !!alreadyBeenBettedOn };
+    const [myBets, myTicketBets] = await Promise.all([
+      prisma.gameBet.findMany({
+        where: { sessionId: active.id, userId },
+      }),
+      prisma.gameBet.findMany({
+        where: {
+          sessionId: active.id,
+          ticket: { userId },   
+        },
+      }),
+    ]);
+
+    const allBets = [...myBets, ...myTicketBets];
+
+    return { ...active, betted: allBets.length > 0, myBets: allBets };
   } catch (error) {
     console.error(error);
     throw { error: "An error occurred while fetching the active session." };

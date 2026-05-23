@@ -7,6 +7,7 @@ export interface HistoryEntry {
   number: number;
   points: number;
   segmentColor: number;
+  letterColor:number;
   timestamp: number;
   isZero: boolean;
 }
@@ -21,21 +22,22 @@ export class GameHistoryContext {
   readonly PAGE_SIZE = 12;
   private currentPage: number = 0;
 
-  addEntry(gameId: number, letter: string, number: number, points: number, segmentColor: number): HistoryEntry {
+  addEntry(gameId: number, letter: string, number: number, points: number, segmentColor: number, letterColor:number): HistoryEntry {
     const entry: HistoryEntry = {
       gameId,
       letter,
       number,
       points,
       segmentColor,
+      letterColor,
       timestamp: Date.now(),
       isZero: points === 0,
     };
-    this.entries.unshift(entry); // newest first
+    this.entries.unshift(entry);  
     if (this.entries.length > this.maxEntries) {
       this.entries.pop();
     }
-    this.currentPage = 0; // reset to first page on new entry
+    this.currentPage = 0; 
     this.notify();
     return entry;
   }
@@ -51,7 +53,7 @@ addEntries(entries: HistoryEntry[]): void {
     this.entries = this.entries.slice(0, this.maxEntries);
   }
 
-  this.currentPage = 0; // reset to first page
+  this.currentPage = 0;  
   this.notify();
 }
 

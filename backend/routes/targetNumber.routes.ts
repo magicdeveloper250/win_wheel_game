@@ -10,9 +10,9 @@ const router = Router();
 router.post(
   "/numbers/",
   async (req: Request, res: Response) => {
-    const {  number, color } = req.body;
+    const {  number, color , multiplierNumber} = req.body;
 
-    const result = await createTargetNumber({  number, color });
+    const result = await createTargetNumber({  number, color, multiplierNumber });
 
     if ("error" in result) {
       if (result.error.includes("already exists")) {
@@ -64,9 +64,9 @@ router.get("/numbers/:id", authenticate, async (req: Request, res: Response) => 
 
 
 router.patch("/numbers/:id", authenticate, async(req, res)=>{
-     const {  number, color } = req.body;
+     const {  number, color, multiplierNumber } = req.body;
 const id = req.params.id as string;
-    const result = await updateTarget(id,{  number, color });
+    const result = await updateTarget(id,{  number, color, multiplierNumber });
 
     if ("error" in result) {
       if (result.error.includes("already exists")) {

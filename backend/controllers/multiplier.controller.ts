@@ -15,7 +15,7 @@ export const getAllMultipliers = async () => {
   try {
     const [multipliers, total] = await prisma.$transaction([
       prisma.gameWinMultiplier.findMany({
-        orderBy: { createdAt: "desc" },
+        orderBy: { multiplierLetter: "asc" },
       }),
       prisma.gameWinMultiplier.count(),
     ]);
@@ -74,6 +74,7 @@ export const updateMultiplier = async (
   params: Partial<{
     label: string;
     value: number;
+    multiplierNumber: number;
     color:string
   }>,
 ) => {

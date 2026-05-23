@@ -1,0 +1,23 @@
+{
+  "success": false,
+  "referenceId": "REF-IN-20260523113128-7043",
+  "transactionId": null,
+  "status": "PENDING",
+  "message": "Successful",
+  "raw": {
+    "status": "success",
+    "transaction_id": "01KSA2T3AJTEMNYE580HDRQRPX",
+    "refid": "REF-IN-20260523113128-7043",
+    "message": "Successful",
+    "response": {
+      "status": "Successfull",
+      "referenceid": "28083909015",
+      "success": true,
+      "referenceno": "28083909015",
+      "responsecode": "01",
+      "transactionid": "01KSA2T3AJTEMNYE580HDRQRPX",
+      "message": "Transaction Successful for Payment Transaction"
+    }
+  }
+}
+ 

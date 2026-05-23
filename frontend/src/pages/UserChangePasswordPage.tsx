@@ -1,41 +1,37 @@
 import { useState } from "react";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import useSession from "@/hooks/useSession";
 import useUserAxios from "@/hooks/useUserAxios";
-import { cn } from "@/lib/utils";
+import PasswordInput from "@/components/ui/PasswordInput";
+import StrengthBar from "@/components/ui/PasswordStrengthBar";
+
+
+
 
 export default function UserChangePasswordPage() {
   const axios = useUserAxios();
   const { session } = useSession();
 
-  const [password, setPassword] = useState("");
+  const [password, setPassword]               = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword]       = useState(false);
+  const [showConfirm, setShowConfirm]         = useState(false);
+  const [saving, setSaving]                   = useState(false);
+  const [error, setError]                     = useState<string | null>(null);
+
+  const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!session?.id) {
-      setError("Session not found.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Password and confirm password do not match.");
-      return;
-    }
+    if (!session?.id) { setError("Session not found."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (password !== confirmPassword) { setError("Passwords do not match."); return; }
 
     setSaving(true);
     try {
@@ -51,65 +47,77 @@ export default function UserChangePasswordPage() {
   };
 
   return (
-    <form onSubmit={submit} className="w-full rounded-lg border border-border bg-card p-4 space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold">Change Password</h1>
-        <p className="text-sm text-muted-foreground">Use a strong password with at least 6 characters.</p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="new-password">New Password</Label>
-        <div className="relative">
-          <Input
-            id="new-password"
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="pr-10 p-6"
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
+    <div className="w-full p-2">
+      <form
+        onSubmit={submit}
+        className="rounded-xl border border-border bg-card shadow-sm overflow-hidden"
+      >
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4 bg-muted/30">
+          <div className="rounded-lg bg-primary/10 p-2 shrink-0">
+            <ShieldCheck size={16} className="text-primary" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-foreground">Change Password</h1>
+            <p className="text-xs text-muted-foreground">
+              Use a strong password with at least 6 characters
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="confirm-new-password">Confirm New Password</Label>
-        <div className="relative">
-          <Input
-            id="confirm-new-password"
-            type={showConfirmPassword ? "text" : "password"}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="pr-10 p-6"
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirmPassword((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-            aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+        <div className="px-5 py-5 space-y-5">
+          <div className="space-y-1">
+            <PasswordInput
+              id="new-password"
+              label="New Password"
+              value={password}
+              onChange={setPassword}
+              show={showPassword}
+              onToggleShow={() => setShowPassword((v) => !v)}
+            />
+            <StrengthBar password={password} />
+          </div>
+
+          <div className="space-y-1">
+            <PasswordInput
+              id="confirm-new-password"
+              label="Confirm New Password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              show={showConfirm}
+              onToggleShow={() => setShowConfirm((v) => !v)}
+            />
+            {mismatch && (
+              <p className="text-xs text-destructive font-medium pt-0.5">
+                Passwords do not match
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <Alert variant="destructive" className="py-2.5">
+              <AlertDescription className="text-xs">{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <Button
+            type="submit"
+            disabled={saving || mismatch || password.length < 6}
+            className="w-full h-11 gap-2 font-semibold"
           >
-            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
+            {saving ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                Updating…
+              </>
+            ) : (
+              <>
+                <ShieldCheck size={15} />
+                Update Password
+              </>
+            )}
+          </Button>
         </div>
-      </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <Button type="submit" disabled={saving}  className={cn("p-6")}>
-        {saving ? <Loader2 className="animate-spin" /> : "Update Password"}
-      </Button>
-    </form>
+      </form>
+    </div>
   );
 }

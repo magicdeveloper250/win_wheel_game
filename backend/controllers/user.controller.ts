@@ -3,10 +3,7 @@ import { prisma } from "../lib/prisma";
 
 const SALT_ROUNDS = 10;
 
-// ---------------------------------------------------------------------------
-// Read
-// ---------------------------------------------------------------------------
-
+ 
 export const getUserByEmail = async (email: string) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
@@ -38,15 +35,23 @@ export const getAllUsers = async (params?: {
     const [users, total] = await prisma.$transaction([
       prisma.user.findMany({
         skip,
-        take: limit,
+        take: Number(limit),
+        include:{
+           userAccounts:true
+        },
         orderBy: { createdAt: "desc" },
         omit: { password: true },
       }),
       prisma.user.count(),
     ]);
 
+    const formattedUsers= users.map((u)=>({...u,userAccounts:"", balance: u.userAccounts.reduce((total,account)=>{
+      return total+ Number(account.balance)
+      
+    }, 0)}))
+
     return {
-      data: users,
+      data: formattedUsers,
       meta: {
         total,
         page,
@@ -54,15 +59,13 @@ export const getAllUsers = async (params?: {
         totalPages: Math.ceil(total / limit),
       },
     };
-  } catch {
+  } catch(e) {
+    console.log(e)
     return { error: "An error occurred while fetching users." };
   }
 };
 
-// ---------------------------------------------------------------------------
-// Create
-// ---------------------------------------------------------------------------
-
+ 
 export const createUser = async (params: {
   email: string;
   name: string;
@@ -99,25 +102,24 @@ export const createUser = async (params: {
   }
 };
 
-// ---------------------------------------------------------------------------
-// Update
-// ---------------------------------------------------------------------------
-
+ 
 export const updateUser = async (
   id: string,
   params: Partial<{
     name: string;
     phone: string;
     email: string;
+    role?:string;
+    isActive:boolean
   }>,
 ) => {
   try {
+    console.log(params)
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) {
       return { error: "User not found." };
     }
 
-    // If email is being changed, ensure it isn't already taken
     if (params.email && params.email !== existing.email) {
       const emailTaken = await prisma.user.findUnique({
         where: { email: params.email },
@@ -125,16 +127,35 @@ export const updateUser = async (
       if (emailTaken) {
         return { error: "Email is already in use by another account." };
       }
+      const phoneTaken= await prisma.user.findUnique({
+        where: { phone: params.phone },
+      });
+
+      if (phoneTaken) {
+        return { error: "Phone is already in use by another account." };
+      }
+    }
+
+      if (params.phone && params.phone !== existing.phone) {
+      
+      const phoneTaken= await prisma.user.findUnique({
+        where: { phone: params.phone },
+      });
+
+      if (phoneTaken) {
+        return { error: "Phone is already in use by another account." };
+      }
     }
 
     const user = await prisma.user.update({
       where: { id },
-      data: { ...params, updatedAt: new Date() },
+      data: { ...params, updatedAt: new Date(), role:params.role?params.role:existing.role},
       omit: { password: true },
     });
 
     return user;
-  } catch {
+  } catch(e) {
+    console.log(e)
     return { error: "An error occurred while updating the user." };
   }
 };
@@ -162,10 +183,7 @@ export const updateUserPassword = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// Delete
-// ---------------------------------------------------------------------------
-
+ 
 export const deleteUser = async (id: string) => {
   try {
     const existing = await prisma.user.findUnique({ where: { id } });
@@ -180,14 +198,7 @@ export const deleteUser = async (id: string) => {
   }
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Returns the user with the password field included.
- * Use only in auth flows (e.g. comparing hashed passwords).
- */
+ 
 export const getUserWithPasswordByEmail = async (email: string) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
@@ -197,10 +208,7 @@ export const getUserWithPasswordByEmail = async (email: string) => {
   }
 };
 
-/**
- * Verifies a plain-text password against the stored hash.
- * Returns the user (without password) on success, or an error object.
- */
+ 
 export const verifyUserPassword = async (
   email: string,
   plainPassword: string,

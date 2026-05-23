@@ -1,6 +1,11 @@
 // utils/layout.ts — wheel-first, overflow-safe layout engine
 
-export type LayoutMode = "phone-portrait" | "phone-landscape" | "tablet" | "desktop" | "tv";
+export type LayoutMode =
+  | "phone-portrait"
+  | "phone-landscape"
+  | "tablet"
+  | "desktop"
+  | "tv";
 
 export interface Layout {
   mode: LayoutMode;
@@ -57,7 +62,9 @@ export function computeLayout(W: number, H: number): Layout {
   const pad = Math.round(5 * uiScale);
 
   const headerH    = Math.round(Math.max(36, 44 * uiScale));
-  const statusBarH = Math.round(Math.max(64, 78 * uiScale));
+  const statusBarH = (mode === "phone-portrait" || mode === "phone-landscape")
+    ? 0
+    : Math.round(Math.max(30, 55 * uiScale));
 
   // ── History panel widths ──────────────────────────────────────────────────
   let historyW = 0;
@@ -76,17 +83,16 @@ export function computeLayout(W: number, H: number): Layout {
     historyVisible = true;
   } else {
     // desktop
-    historyW = Math.round(Math.min(270, W * 0.21));
+    historyW = Math.round(Math.min(200, W * 0.14));
     historyVisible = true;
   }
 
   // ── Button sizing ─────────────────────────────────────────────────────────
   const spinBtnH  = Math.round(Math.max(32, 44 * uiScale));
-  // Reserve less vertical space for buttons so the wheel can grow taller
-  const btnStripH = spinBtnH + pad * 2;
+  const btnStripH = 0; // don't subtract buttons from wheel height
 
   // ── Wheel available area ──────────────────────────────────────────────────
-  const wheelAreaX    = historyW + (historyVisible ? pad * 2 : 0);
+  const wheelAreaX     = historyW + (historyVisible ? pad * 2 : 0);
   const safeWheelAreaW = W - wheelAreaX - pad;
 
   // ── Button widths ─────────────────────────────────────────────────────────
@@ -98,20 +104,23 @@ export function computeLayout(W: number, H: number): Layout {
   const btnScale     = rawTotal > maxBtnTotalW ? maxBtnTotalW / rawTotal : 1;
   const spinBtnW     = Math.round(rawSpinBtnW  * btnScale);
   const resetBtnW    = Math.round(rawResetBtnW * btnScale);
-  const btnGap       = Math.round((spinBtnW / 2 + resetBtnW / 2) + rawBtnGap * btnScale);
+  const btnGap       = Math.round(spinBtnW / 2 + resetBtnW / 2 + rawBtnGap * btnScale);
 
   const spinFontSize  = Math.round(Math.min(Math.max(11, 19 * uiScale), spinBtnH * 0.52));
   const resetFontSize = Math.round(Math.min(Math.max(10, 17 * uiScale), spinBtnH * 0.48));
 
-  // ── Wheel size — maximise to fill available space ─────────────────────────
-  // Available height after header, status bar and button strip
+  // ── Wheel size ────────────────────────────────────────────────────────────
   const wheelAreaH = H - headerH - statusBarH - btnStripH - pad * 2;
 
-  // Use 96% of whichever axis is smaller, so the wheel is as large as possible
-  // without clipping. Previously this was 100% which left no breathing room;
-  // bump both axes up and take the smaller to stay within bounds.
-  const wheelSizeFromW = Math.round(safeWheelAreaW  * 0.96);
-  const wheelSizeFromH = Math.round(wheelAreaH       * 0.96);
+  let targetWheelW: number;
+  if (mode === "desktop" || mode === "tv") {
+    targetWheelW = Math.round(W * 0.51);
+  } else {
+    targetWheelW = safeWheelAreaW;
+  }
+
+  const wheelSizeFromW = Math.round(targetWheelW * 0.96);
+  const wheelSizeFromH = Math.round(wheelAreaH * 1.30); // relaxed height cap
   const wheelSize      = Math.max(80, Math.min(wheelSizeFromW, wheelSizeFromH));
   const wheelScale     = wheelSize / BASE_SIZE;
 
