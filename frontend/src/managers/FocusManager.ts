@@ -8,11 +8,10 @@ const KEY_LEFT  = [37, 21];
 const KEY_RIGHT = [39, 22];
 const KEY_BACK  = [8, 27, 166, 461];
 
-const TAP_NOTES = [329.63, 369.99, 415.30, 466.16, 523.25];
 let _tapNoteIdx = 0;
 
 function playTapNote(): void {
-  audioManager.playTap(TAP_NOTES[_tapNoteIdx % TAP_NOTES.length]);
+  audioManager.playTap();
   _tapNoteIdx++;
 }
 

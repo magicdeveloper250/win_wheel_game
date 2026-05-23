@@ -435,7 +435,7 @@ export class AudioManager {
     }
   }
 
-  playTap(frequency: number = 440): void {
+  playTap( ): void {
     if (!this.enabled) return;
     this.playMechanicalClick(0);
   }

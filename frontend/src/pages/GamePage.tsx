@@ -44,12 +44,9 @@ import Logo from "@/components/ui/Logo";
 import {
   ChevronLeft,
   CreditCard,
-  Ellipse,
   Ellipsis,
   List,
-  Loader2,
   Menu,
-  MoreVertical,
 } from "lucide-react";
 import UserMoneyDialog from "@/components/ui/UserMoneyDialog";
 import { Button } from "@/components/ui/button";
@@ -185,10 +182,7 @@ const GamePage: React.FC = () => {
   const [myActiveBets, setMyActiveBets] = useState<GameBet[] | null>(null);
   const userSession = useSession();
   const [betSlipOpen, setBetSlipOpen] = useState(false);
-  const [sessionResult, setSessionResult] = useState<{
-    winNumber: number;
-    winMultiplier: string;
-  } | null>(null);
+  
   const extractFinancialSetting = (
     payload: unknown,
   ): GameFinancialSetting | null => {
@@ -598,9 +592,7 @@ const GamePage: React.FC = () => {
       }
 
       case "spin_result": {
-        setSessionResult(
-          latestEvent.result as { winNumber: number; winMultiplier: string },
-        );
+        
         spinWheelRef.current(
           latestEvent.winNumber,
           latestEvent.winMultiplier,
@@ -1704,7 +1696,7 @@ const GamePage: React.FC = () => {
                 scrollbarColor: "#1a4a9e #0a1f45",
               }}
             >
-              <style jsx>{`
+              <style>{`
                 div::-webkit-scrollbar {
                   width: 6px;
                 }
@@ -1727,9 +1719,9 @@ const GamePage: React.FC = () => {
                   className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
                   style={{ color: "#6688bb", letterSpacing: "2px" }}
                 >
-                  <span className="inline-block w-5 h-px bg-gradient-to-r from-yellow-400 to-transparent" />
+                  <span className="inline-block w-5 h-px bg-linear-to-r from-yellow-400 to-transparent" />
                   Letter Values
-                  <span className="inline-block flex-1 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+                  <span className="inline-block flex-1 h-px bg-linear-to-r from-transparent via-blue-500/30 to-transparent" />
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[...middleSegments]
@@ -1739,7 +1731,7 @@ const GamePage: React.FC = () => {
                         key={`mid-${m.label}-${idx}`}
                         className="relative flex items-center justify-between rounded-lg px-4 py-3 overflow-hidden transition-all duration-200 cursor-pointer group"
                         style={{
-                          background: `linear-gradient(135deg, #${m.color.toString(16).padStart(6, "0")} 0%, #${m.color.toString(16).padStart(6, "0")}CC 100%)`,
+                          background: `linear-gradient(135deg, #${m.color && m.color.toString(16).padStart(6, "0")} 0%, #${m.color && m.color.toString(16).padStart(6, "0")}CC 100%)`,
                           transform: "translateY(0)",
                           boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1)",
                         }}
@@ -1779,7 +1771,7 @@ const GamePage: React.FC = () => {
                 </div>
               </section>
 
-              <div className="h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+              <div className="h-px bg-linear-to-r from-transparent via-blue-500/30 to-transparent" />
 
               {/* Number Values Section */}
               <section>
@@ -1787,9 +1779,9 @@ const GamePage: React.FC = () => {
                   className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
                   style={{ color: "#6688bb", letterSpacing: "2px" }}
                 >
-                  <span className="inline-block w-5 h-px bg-gradient-to-r from-yellow-400 to-transparent" />
+                  <span className="inline-block w-5 h-px bg-linear-to-r from-yellow-400 to-transparent" />
                   Number Values
-                  <span className="inline-block flex-1 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+                  <span className="inline-block flex-1 h-px bg-linear-to-r from-transparent via-blue-500/30 to-transparent" />
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[...outerSegments]
@@ -1799,7 +1791,7 @@ const GamePage: React.FC = () => {
                         key={`outer-${m.label}-${idx}`}
                         className="relative flex items-center justify-between rounded-lg px-4 py-3 overflow-hidden transition-all duration-200 cursor-pointer group"
                         style={{
-                          background: `linear-gradient(135deg, #${m.color.toString(16).padStart(6, "0")} 0%, #${m.color.toString(16).padStart(6, "0")}CC 100%)`,
+                          background: `linear-gradient(135deg, #${m.color  && m.color.toString(16).padStart(6, "0")} 0%, #${m.color && m.color.toString(16).padStart(6, "0")}CC 100%)`,
                           transform: "translateY(0)",
                           boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1)",
                         }}

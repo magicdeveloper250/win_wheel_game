@@ -7,7 +7,6 @@ import { audioManager } from "@/managers/AudioManager";
 export class StatusBarWidget {
   container: Container;
   private ctx: GameStatusContext;
-  private layout: Layout;
   private unsubscribe: (() => void) | null = null;
 
   private bg: Graphics;
@@ -36,7 +35,6 @@ export class StatusBarWidget {
 
   constructor(ctx: GameStatusContext, layout: Layout, focusManager?: FocusManager) {
     this.ctx    = ctx;
-    this.layout = layout;
     this.container = new Container();
 
     this.bg = new Graphics();
@@ -298,7 +296,6 @@ export class StatusBarWidget {
   }
 
   resize(layout: Layout): void {
-    this.layout = layout;
     this.applyLayout(layout);
   }
 

@@ -3,7 +3,7 @@ import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import {
   Ticket, X, Hash, Type, Loader2, AlertCircle,
-  Plus, Minus, Printer, Download, ExternalLink, CheckCircle2,
+  Plus, Minus, Printer,   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -197,19 +197,7 @@ export default function TicketBetDialog({ onSuccess }: DialogProps) {
     setSelectedTargets([]); setSlipResult(null);
   };
 
-  // Print by injecting a hidden iframe so the OS print dialog opens on the PDF
-  const handlePrint = (slipUrl: string) => {
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;border:none;visibility:hidden;";
-    iframe.src = slipUrl;
-    document.body.appendChild(iframe);
-    iframe.onload = () => {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-      setTimeout(() => document.body.removeChild(iframe), 2000);
-    };
-  };
-
+ 
   
 
   const submit = async () => {
