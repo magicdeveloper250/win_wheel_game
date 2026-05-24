@@ -1557,65 +1557,43 @@ var getMyTransactions = async (params) => getTransactions({
   userId: params.userId
 });
 var createDeposit = async (params) => {
-  console.log(params.userId);
-  console.log(params.phoneNumber);
-  console.log(params.provider == "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA");
   if (!Number.isFinite(params.amount) || params.amount <= 0) {
     throw { error: "Amount must be greater than 0." };
   }
-  if (!Number.isFinite(params.amount) || params.amount > 1e6) {
+  if (params.amount > 1e6) {
     throw {
       error: "Deposit would exceed maximum balance limit of 1,000,000."
     };
   }
+  const user = await prisma.user.findFirst({ where: { id: params.userId } });
+  if (!user) {
+    throw { error: "The Deposit user not found in the system" };
+  }
+  if (!user.phone) {
+    throw { error: "User phone number is required to proceed the operation" };
+  }
+  const rawPhone = params.phoneNumber && params.phoneNumber.length > 5 ? params.phoneNumber : user.phone;
+  const paymentPhone = parseRwandaPhone(rawPhone);
+  const ps = new PaymentSystem(loadConfigFromEnv());
+  const result = await ps.initiatePayment({
+    email: user.email,
+    name: user.name,
+    phone: paymentPhone,
+    amount: params.amount,
+    paymentMethod: params.provider === "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
+    servicePaid: "payment"
+  });
+  if (!result.success) {
+    throw { error: result.message ?? "Payment initiation failed." };
+  }
+  const transactionId = result.transactionId;
+  const referenceId = result.referenceId;
   return prisma.$transaction(
     async (tx) => {
-      const user = await prisma.user.findFirst({
-        where: {
-          id: params.userId
-        }
-      });
-      if (!user) {
-        throw { error: "The Deposit user not found in the system" };
-      }
-      if (!user.phone) {
-        throw {
-          error: "User phone number is required to proceed the operation"
-        };
-      }
-      let paymentPhone = null;
-      if (params.phoneNumber && params.phoneNumber.length > 5) {
-        paymentPhone = parseRwandaPhone(params.phoneNumber);
-      } else {
-        paymentPhone = parseRwandaPhone(user.phone);
-      }
-      const ps = new PaymentSystem(loadConfigFromEnv());
-      const result = await ps.initiatePayment({
-        email: user.email,
-        name: user.name,
-        phone: parseRwandaPhone(paymentPhone),
-        amount: params.amount,
-        paymentMethod: params.provider == "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
-        servicePaid: "payment"
-      });
-      const realResult = result.raw;
-      if (realResult.status = "success") {
-        throw { error: result.message };
-      }
-      const transactionId = realResult.transaction_id;
-      const referenceId = realResult.refid;
-      await tx.userAccount.upsert({
+      const updatedAccount = await tx.userAccount.upsert({
         where: { userId: params.userId },
-        update: {},
-        create: { userId: params.userId, balance: 0 }
-      });
-      const updatedAccount = await tx.userAccount.update({
-        where: { userId: params.userId },
-        data: {
-          balance: {
-            increment: params.amount
-          }
-        },
+        update: { balance: { increment: params.amount } },
+        create: { userId: params.userId, balance: params.amount },
         select: { balance: true }
       });
       if (Number(updatedAccount.balance) > 1e6) {
@@ -1639,7 +1617,7 @@ var createDeposit = async (params) => {
         meta: { provider: params.provider }
       };
     },
-    { timeout: 6e4, maxWait: 6e4 }
+    { timeout: 15e3, maxWait: 15e3 }
   );
 };
 var createWithdrawal = async (params) => {

@@ -418,9 +418,14 @@ export class PredictionPanel {
     this.cells.clear();
 
     const numbers = this.segments;
-    const COLS = Math.min(numbers.length, numbers.length <= 20 ? 7 : 9);
+    // Compact mode when panel height is tight (mobile bottom panel).
+    // More columns = fewer rows = less vertical space consumed.
+    const isCompact = panelH < 380;
+    const COLS = isCompact
+      ? Math.min(numbers.length, numbers.length <= 20 ? 10 : 11)
+      : Math.min(numbers.length, numbers.length <= 20 ? 7 : 9);
     const availW = panelW - PAD * 2;
-    const cellGap = Math.round(availW * 0.024);
+    const cellGap = Math.round(availW * (isCompact ? 0.014 : 0.024));
     const cellSize = Math.round((availW - cellGap * (COLS - 1)) / COLS);
     const ROWS = Math.ceil(numbers.length / COLS);
 
@@ -484,7 +489,9 @@ export class PredictionPanel {
 
     // ── Selection bar ─────────────────────────────────────────────────────
     const selW = panelW - PAD * 2;
-    const selH = Math.round(panelH * 0.075);
+    const selH = isCompact
+      ? Math.max(22, Math.round(panelH * 0.055))
+      : Math.round(panelH * 0.075);
     this.selectionBar.x = PAD;
     this.selectionBar.y = y;
 
@@ -503,7 +510,9 @@ export class PredictionPanel {
     y += selH + PAD * 0.6;
 
     // ── Amount row ────────────────────────────────────────────────────────
-    const inputH = Math.min(44, Math.max(36, Math.round(panelH * 0.095)));
+    const inputH = isCompact
+      ? Math.max(28, Math.round(panelH * 0.075))
+      : Math.min(44, Math.max(36, Math.round(panelH * 0.095)));
     const stepGap = Math.max(8, Math.round(PAD * 0.5));
     const stepW = Math.max(38, Math.round(panelW * 0.1));
     const leftStepX = PAD;

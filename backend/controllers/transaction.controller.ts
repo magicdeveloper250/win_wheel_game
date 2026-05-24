@@ -88,72 +88,68 @@ export const createDeposit = async (params: {
   userId: string;
   amount: number;
   provider: "MOMO" | "AIRTEL_MONEY";
-  phoneNumber?:string
+  phoneNumber?: string;
 }) => {
-  console.log(params.userId);
-  console.log(params.phoneNumber)
-  console.log( params.provider == "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA")
   if (!Number.isFinite(params.amount) || params.amount <= 0) {
     throw { error: "Amount must be greater than 0." };
   }
 
-  if (!Number.isFinite(params.amount) || params.amount > 1_000_000) {
+  if (params.amount > 1_000_000) {
     throw {
       error: "Deposit would exceed maximum balance limit of 1,000,000.",
     };
   }
 
+  // ── 1. Fetch user BEFORE opening a DB transaction ──────────────────────────
+  const user = await prisma.user.findFirst({ where: { id: params.userId } });
+  if (!user) {
+    throw { error: "The Deposit user not found in the system" };
+  }
+  if (!user.phone) {
+    throw { error: "User phone number is required to proceed the operation" };
+  }
+
+  // Resolve the phone to charge: prefer the caller-supplied number, fall back
+  // to the one stored on the user record.
+  const rawPhone =
+    params.phoneNumber && params.phoneNumber.length > 5
+      ? params.phoneNumber
+      : user.phone;
+  const paymentPhone = parseRwandaPhone(rawPhone);
+
+  // ── 2. Initiate payment OUTSIDE the DB transaction ─────────────────────────
+  // Keeping an external HTTP call inside prisma.$transaction holds the DB
+  // connection open for the full MoMo round-trip, which causes timeouts on
+  // hosted environments like Render.
+  const ps = new PaymentSystem(loadConfigFromEnv());
+  const result = await ps.initiatePayment({
+    email: user.email,
+    name: user.name,
+    phone: paymentPhone,
+    amount: params.amount,
+    paymentMethod:
+      params.provider === "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
+    servicePaid: "payment",
+  });
+
+  if (!result.success) {
+    throw { error: result.message ?? "Payment initiation failed." };
+  }
+
+  const transactionId = result.transactionId;
+  const referenceId = result.referenceId;
+
+  // ── 3. Record the deposit in a short DB transaction ────────────────────────
   return prisma.$transaction(
     async (tx) => {
-      const user = await prisma.user.findFirst({
-        where: {
-          id: params.userId,
-        },
-      });
-      if (!user) {
-        throw { error: "The Deposit user not found in the system" };
-      }
-      if (!user.phone) {
-        throw {
-          error: "User phone number is required to proceed the operation",
-        };
-      }
-      let paymentPhone= null;
-      if(params.phoneNumber && params.phoneNumber.length>5){
-        paymentPhone= parseRwandaPhone( params.phoneNumber)
-      }else{
-        paymentPhone= parseRwandaPhone( user.phone)
-
-      }
-      const ps = new PaymentSystem(loadConfigFromEnv());
-      const result = await ps.initiatePayment({
-        email: user.email,
-        name: user.name,
-        phone: parseRwandaPhone(paymentPhone),
-        amount: params.amount,
-        paymentMethod:
-          params.provider == "MOMO" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
-        servicePaid: "payment",
-      });
-      const realResult: any = result.raw;
-      if ((realResult.status! = "success")) {
-        throw { error: result.message };
-      }
-      const transactionId = realResult.transaction_id;
-      const referenceId = realResult.refid;
-      await tx.userAccount.upsert({
+      // Single upsert: increment on existing row, seed with the deposit amount
+      // on first creation. Avoids the P2025 "record not found" error that
+      // occurred when the separate update ran before the upsert's create
+      // was visible within the same transaction.
+      const updatedAccount = await tx.userAccount.upsert({
         where: { userId: params.userId },
-        update: {},
-        create: { userId: params.userId, balance: 0 },
-      });
-
-      const updatedAccount = await tx.userAccount.update({
-        where: { userId: params.userId },
-        data: {
-          balance: {
-            increment: params.amount,
-          },
-        },
+        update: { balance: { increment: params.amount } },
+        create: { userId: params.userId, balance: params.amount },
         select: { balance: true },
       });
 
@@ -180,7 +176,7 @@ export const createDeposit = async (params: {
         meta: { provider: params.provider },
       };
     },
-    { timeout: 60_000, maxWait: 60_000 },
+    { timeout: 15_000, maxWait: 15_000 },
   );
 };
 

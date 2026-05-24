@@ -81,21 +81,28 @@ export default function VerifyTicketDialog() {
   }, [stopCamera]);
 
   const startCamera = useCallback(async () => {
-    setState({ status: "scanning" });
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        rafRef.current = requestAnimationFrame(tick);
-      }
+      // Set scanning state AFTER we have the stream so the <video> element
+      // mounts in the same render cycle that we attach the stream via useEffect.
+      setState({ status: "scanning" });
     } catch {
       setState({ status: "error", message: "Camera access denied." });
     }
-  }, [tick]);
+  }, []);
+
+  // Attach the stream to the video element once it mounts (after state → "scanning").
+  useEffect(() => {
+    if (state.status !== "scanning" || !streamRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = streamRef.current;
+    video.play().catch(() => {/* autoplay blocked — playsInline should handle it */});
+    rafRef.current = requestAnimationFrame(tick);
+  }, [state.status, tick]);
 
   const verifyTicket = useCallback(async (url: string) => {
     setState({ status: "loading" });

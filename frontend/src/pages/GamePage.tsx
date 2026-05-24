@@ -140,7 +140,9 @@ function computePanelRect(
     x: panelX,
     y: panelTop,
     w: panelW,
-    h: Math.max(panelH, MIN_PANEL_H),
+    // Use real available space — never force MIN_PANEL_H here.
+    // Forcing 460px on a small phone pushes the confirm button off-screen.
+    h: Math.max(panelH, 180),
   };
 }
 
@@ -812,11 +814,23 @@ const GamePage: React.FC = () => {
       app.stage.addChild(magnifier.container);
       magnifierRef.current = magnifier;
 
+      // On large screens (desktop/tv) cap the font sizes so they don't grow
+      // too large; on mobile the wheelScale is already small so the natural
+      // value is fine and we leave it untouched.
+      const isLargeScreen =
+        layout.mode === "desktop" || layout.mode === "tv";
+      const outerFontSize = isLargeScreen
+        ? Math.round(Math.min(32, 42 * layout.wheelScale))
+        : Math.round(42 * layout.wheelScale);
+      const midFontSize = isLargeScreen
+        ? Math.round(Math.min(72, 110 * layout.wheelScale))
+        : 110;
+
       const outer = buildRingContainer(
         outerSegments,
         MIDDLE_RADIUS,
         OUTER_RADIUS,
-        Math.round(26 * layout.wheelScale),
+        outerFontSize,
       );
       outer.filters = RING_FILTERS();
       wheelContainer.addChild(outer);
@@ -826,7 +840,7 @@ const GamePage: React.FC = () => {
         middleSegments,
         INNER_RADIUS,
         MIDDLE_RADIUS,
-        70,
+        midFontSize,
         true,
       );
       mid.filters = RING_FILTERS();
@@ -1462,14 +1476,26 @@ const GamePage: React.FC = () => {
         background: "#0e2456",
       }}
     >
+      {/* Scrollable inner container — fills viewport, scrolls vertically */}
       <div
-        ref={mountRef}
         style={{
           width: "100%",
           height: "100%",
-          touchAction: "none",
-        }}
-      />
+          overflowY: "auto",
+          overflowX: "hidden",
+          WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "none",
+        } as React.CSSProperties}
+      >
+        <div
+          ref={mountRef}
+          style={{
+            width: "100%",
+            height: "100vh",
+            flexShrink: 0,
+            touchAction: "pan-y",
+          }}
+        />
 
       <div
         style={{
@@ -1857,10 +1883,13 @@ const GamePage: React.FC = () => {
           </div>
         </div>
       )}
+      </div>{/* end scrollable inner */}
+
       <UserMoneyDialog
         open={depositOpen}
         onOpenChange={setDepositOpen}
         action="deposit"
+        phoneNumber={userSession.session?.phone}
       />
 
       <BetSlipDialog
